@@ -16,6 +16,8 @@ pip install -e '.[dev]'
 
 `DATABASE_URL` selects the SQLAlchemy database URL. It defaults to `sqlite:///./data/app.db`; a PostgreSQL URL such as `postgresql+psycopg://user:password@host/database` can be used when the corresponding driver is installed.
 
+Copy `.env.example` to `.env` in `backend/` and set `OPENAI_API_KEY` to enable classification. The backend loads this file regardless of the directory used to start the server. `CLASSIFICATION_MODEL` defaults to `gpt-6-luna`, and `CLASSIFICATION_TIMEOUT_SECONDS` defaults to `30`.
+
 ## Migrations and startup
 
 Run these commands from `backend/`:
@@ -25,7 +27,7 @@ alembic upgrade head
 uvicorn app.main:app --reload
 ```
 
-The API is available at `http://localhost:8000`, Swagger at `http://localhost:8000/docs`, and health checks at `/health` and `/ready`. Agent CRUD endpoints are under `/api/v1/agents`.
+The API is available at `http://localhost:8000`, Swagger at `http://localhost:8000/docs`, and health checks at `/health` and `/ready`. Agent CRUD endpoints are under `/api/v1/agents`. To classify an existing agent, call `POST /api/v1/agents/{agent_id}/classify`. The response includes a normalized score for every supported test category, rounded to four decimal places and totaling `1.0000`. The endpoint analyzes the agent definition only; it does not run the agent or save the classification.
 
 ## Tests
 

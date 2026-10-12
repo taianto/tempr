@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
@@ -12,7 +12,13 @@ from app.schemas.agent import (
     AgentUpdate,
     PromptConfig,
 )
+from app.schemas.classification import Classification
 from app.services.agents import AgentService
+from app.services.classification import (
+    ClassificationService,
+    ClassificationServiceError,
+    get_classification_service,
+)
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 
@@ -83,3 +89,18 @@ def delete_agent(
 ) -> Response:
     AgentService(db).delete_agent(agent_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/{agent_id}/classify", response_model=Classification)
+def classify_agent(
+    agent_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    service: Annotated[
+        ClassificationService, Depends(get_classification_service)
+    ],
+) -> Classification:
+    agent = AgentService(db).get_agent(agent_id)
+    try:
+        return Classification(**service.classify(agent))
+    except ClassificationServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
