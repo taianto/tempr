@@ -27,7 +27,29 @@ alembic upgrade head
 uvicorn app.main:app --reload
 ```
 
-The API is available at `http://localhost:8000`, Swagger at `http://localhost:8000/docs`, and health checks at `/health` and `/ready`. Agent CRUD endpoints are under `/api/v1/agents`. To classify an existing agent, call `POST /api/v1/agents/{agent_id}/classify`. The response includes a normalized score for every supported test category, rounded to four decimal places and totaling `1.0000`. The endpoint analyzes the agent definition only; it does not run the agent or save the classification.
+The API is available at `http://localhost:8000`, Swagger at `http://localhost:8000/docs`, and health checks at `/health` and `/ready`. Agent and version endpoints are under `/api/v1/agents`.
+
+Create an agent with its required initial version and schema:
+
+```json
+{
+  "name": "Support agent",
+  "initial_version": {
+    "version": "1.0",
+    "schema": {
+      "description": "Handles customer support requests.",
+      "prompt": { "system": "You are a helpful support assistant." },
+      "model": null,
+      "tools": [],
+      "metadata": {}
+    }
+  }
+}
+```
+
+The initial label defaults to `1.0`. Versions are immutable; add a schema revision with `POST /api/v1/agents/{agent_id}/versions` and a `{ "version": "2.0", "schema": { ... } }` body. Version labels are unique per agent. Agent detail includes the latest created version, and historical versions are available from `GET /api/v1/agents/{agent_id}/versions`.
+
+Classify or retrieve a specific version with `POST /api/v1/agents/{agent_id}/versions/{version_id}/classify` and `GET /api/v1/agents/{agent_id}/versions/{version_id}/classification`. Classification is saved against that immutable version and reused on later requests. Add `?refresh=true` to classify again and replace its saved scores. Scores are normalized to four decimal places and total `1.0000`. The classifier analyzes the version definition; it does not run the agent. Existing agent schemas are migrated to version `1.0`.
 
 ## Tests
 
