@@ -1,11 +1,21 @@
 from functools import lru_cache
-import os
 from pathlib import Path
 
+from pydantic import Field, SecretStr
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
-class Settings:
-    def __init__(self) -> None:
-        self.database_url = os.getenv("DATABASE_URL", "sqlite:///./data/app.db")
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=Path(__file__).resolve().parents[1] / ".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    database_url: str = "sqlite:///./data/app.db"
+    openai_api_key: SecretStr | None = None
+    classification_model: str = "gpt-6-luna"
+    classification_timeout_seconds: float = Field(default=30.0, gt=0)
 
 
 @lru_cache

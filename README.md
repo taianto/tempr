@@ -1,11 +1,28 @@
 # tempr
 
-Lightweight testing and observability for AI agents. Define your agent, generate adversarial and boundary test suites, run them in your own runtime, trace model and tool calls, evaluate behavior, and catch regressions before production.
+**Turn agent definitions into a focused testing strategy.**
 
-## Backend
+tempr is a lightweight platform for evaluating and understanding AI agents. It starts with what developers already have: prompts, model settings, and tool definitions. From that context, it recommends where testing effort should go, helping developers move beyond manually assembled examples toward systematic evaluation.
 
-The first backend milestone provides an API for registering and managing agent definitions. See [backend/README.md](backend/README.md) for setup, migrations, and development commands.
+The goal is to make agent quality assurance practical for individual developers and small teams, with minimal configuration and a workspace that makes results easy to understand.
 
-## Frontend
+## What works today
 
-The React and Vite agent workspace lives in [frontend/](frontend/). See [frontend/README.md](frontend/README.md) for local setup and API configuration.
+- **Versioned agent configurations.** Register agents through the API or UI, inspect their prompts and tools, and preserve each revision as an immutable version.
+- **Context-aware test planning.** An LLM analyzes each version and allocates a testing budget across eight categories: happy paths, boundaries, missing information, ambiguous inputs, prompt injection, policy bypass, sensitive data requests, and hallucination probes.
+- **Version comparison.** Compare allocations side by side to understand how prompt, model, or tool changes affect testing priorities.
+- **Reliable classification handling.** Structured outputs are validated and normalized to total exactly 100%. Results are persisted per version and reused until explicitly regenerated.
+
+These allocations describe what to test; they are not measured failure rates or completed evaluations.
+
+![Agent workspace showing classification allocations](docs/images/classifications-ui.png)
+
+## Where it’s going
+
+The next stages extend this foundation into synthetic test generation, execution in the agent’s own runtime, and LLM-as-a-judge scoring. Execution traces, tool-call inspection, failure explanations, and evaluation comparisons will help developers catch regressions before deployment. Predefined scenarios and natural-language objectives will make evaluation accessible without specialist expertise.
+
+## Built with
+
+React, TypeScript, Vite, and Tailwind power the workspace. FastAPI, Pydantic, SQLAlchemy, and Alembic provide the API, validation, persistence, and migrations. SQLite keeps local setup lightweight; PostgreSQL can be configured through the database URL.
+
+**Run locally:** [Backend setup](backend/README.md) · [Frontend setup](frontend/README.md)
