@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Activity, ChevronRight, Layers3, Sparkles } from "lucide-react";
+import { ChevronRight, Layers3, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAgents } from "../hooks/use-agents";
 
@@ -9,7 +9,7 @@ export function WorkspaceLayout({ children, breadcrumb = [] }: { children: React
   const agents = useAgents();
   return <div className="min-h-screen bg-[#f7f8fa] text-slate-900">
     <aside className="fixed inset-y-0 left-0 z-10 hidden w-[248px] flex-col border-r border-slate-200/80 bg-white lg:flex">
-      <Link to="/agents" className="flex h-[72px] items-center gap-3 border-b border-slate-100 px-6"><span className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-slate-900 text-white"><Activity size={16} /></span><span className="text-[17px] font-semibold tracking-[-0.04em]">tempr</span><span className="ml-auto rounded-md border border-slate-200 px-1.5 py-0.5 text-[10px] font-medium text-slate-400">BETA</span></Link>
+      <Link to="/agents" className="flex h-[72px] items-center gap-3 border-b border-slate-100 px-6"><img src="/tempr.png" alt="" className="h-8 w-8 shrink-0 object-contain" /><span className="text-[17px] font-semibold tracking-[-0.04em]">tempr</span><span className="ml-auto rounded-md border border-slate-200 px-1.5 py-0.5 text-[10px] font-medium text-slate-400">BETA</span></Link>
       <div className="px-4 pt-7"><p className="px-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">Workspace</p><nav aria-label="Main navigation" className="mt-3 space-y-1"><Link to="/agents" className="flex items-center gap-3 rounded-lg bg-slate-100 px-3 py-2.5 text-sm font-medium text-slate-900"><Layers3 size={17} className="text-slate-600" />Agents<span className="ml-auto rounded-md bg-white px-2 py-0.5 text-xs text-slate-500">{agents.data?.total ?? "—"}</span></Link><a href={API_DOCS_URL} target="_blank" rel="noreferrer" className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-slate-600 transition hover:bg-slate-50"><span className="flex h-[17px] w-[17px] items-center justify-center rounded bg-slate-100 font-mono text-[9px] font-semibold">API</span>API Docs<span className="ml-auto text-xs text-slate-400">↗</span></a></nav></div>
       <div className="mt-auto p-4"><div className="rounded-xl border border-slate-200/80 bg-slate-50/80 p-4"><div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-indigo-600 shadow-sm"><Sparkles size={16} /></div><p className="mt-3 text-sm font-medium text-slate-800">Build with confidence</p><p className="mt-1 text-xs leading-5 text-slate-500">Test your agents against the unexpected.</p></div></div>
     </aside>
