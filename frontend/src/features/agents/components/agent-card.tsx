@@ -1,11 +1,11 @@
 import { ArrowUpRight, Bot, CalendarDays, Wrench } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Link } from "react-router-dom";
 import { formatDate, initials } from "@/lib/format";
 import type { AgentListItem } from "../types";
 
 const avatarStyles = ["bg-indigo-50 text-indigo-600", "bg-emerald-50 text-emerald-700", "bg-amber-50 text-amber-700", "bg-sky-50 text-sky-700", "bg-violet-50 text-violet-700"];
 
-export function AgentCard({ agent, index, onSelect }: { agent: AgentListItem; index: number; onSelect: () => void }) {
+export function AgentCard({ agent, index }: { agent: AgentListItem; index: number }) {
   return (
     <article className="group flex min-h-[247px] flex-col rounded-2xl border border-slate-200/80 bg-white p-5 shadow-soft transition duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-card sm:p-6">
       <div className="flex items-start justify-between">
@@ -14,11 +14,11 @@ export function AgentCard({ agent, index, onSelect }: { agent: AgentListItem; in
       </div>
       <div className="mt-5 flex-1">
         <h3 className="truncate text-[15px] font-semibold tracking-[-0.02em] text-slate-900">{agent.name}</h3>
-        <p className="mt-2 line-clamp-2 min-h-10 text-sm leading-5 text-slate-500">{agent.description || "No description provided yet."}</p>
+        <p className="mt-2 line-clamp-2 min-h-10 text-sm leading-5 text-slate-500">Version {agent.latest_version.version} · {agent.latest_version.classification_id ? "Classification ready" : "Needs classification"}</p>
       </div>
       <div className="mt-5 flex items-center justify-between border-t border-slate-100 pt-4">
         <span className="inline-flex items-center gap-1.5 text-xs text-slate-400"><CalendarDays size={13} />Updated {formatDate(agent.updated_at)}</span>
-        <Button variant="ghost" size="sm" className="-mr-2 h-8 gap-1 rounded-md px-2 text-xs text-slate-600 opacity-75 group-hover:opacity-100" onClick={onSelect}>View agent <ArrowUpRight size={14} /></Button>
+        <Link to={`/agents/${encodeURIComponent(agent.id)}`} className="-mr-2 inline-flex h-8 items-center gap-1 rounded-md px-2 text-xs text-slate-600 hover:bg-slate-100">View agent <ArrowUpRight size={14} /></Link>
       </div>
     </article>
   );
