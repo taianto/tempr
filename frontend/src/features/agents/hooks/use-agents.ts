@@ -1,12 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { agentsApi } from "../api";
-import type { Agent, AgentCreateInput, AgentUpdateInput, AgentVersion, Classification, VersionCreateInput } from "../types";
+import type { Agent, AgentCreateInput, AgentUpdateInput, AgentVersion, Classification, TestSuite, TestSuiteGeneration, VersionCreateInput } from "../types";
 
 export const agentKeys = {
   all: ["agents"] as const,
   detail: (id: string) => ["agents", id] as const,
   versions: (id: string) => ["agents", id, "versions"] as const,
   version: (id: string, versionId: string) => ["agents", id, "versions", versionId] as const,
+  testSuite: (id: string, versionId: string) => ["agents", id, "versions", versionId, "test-suite"] as const,
 };
 
 export function useAgents() {
@@ -23,6 +24,35 @@ export function useVersions(id: string) {
 
 export function useVersion(id: string, versionId: string) {
   return useQuery({ queryKey: agentKeys.version(id, versionId), queryFn: ({ signal }) => agentsApi.getVersion(id, versionId, signal), enabled: Boolean(id && versionId), retry: (count, error) => !(error instanceof Error && "status" in error && error.status === 404) && count < 1 });
+}
+
+export function useTestSuite(id: string, versionId: string) {
+  return useQuery({
+    queryKey: agentKeys.testSuite(id, versionId),
+    queryFn: ({ signal }) => agentsApi.getTestSuite(id, versionId, signal),
+    enabled: Boolean(id && versionId),
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status === "queued" || status === "running" ? 2_000 : false;
+    },
+  });
+}
+
+export function useGenerateTestSuite(id: string, versionId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationKey: ["generate-test-suite", id, versionId],
+    mutationFn: (totalCount: number) => agentsApi.generateTestSuite(id, versionId, totalCount),
+    onSuccess: async (generation: TestSuiteGeneration) => {
+      const currentSuite: TestSuite = {
+        ...generation,
+        items: [],
+        generated_at: null,
+      };
+      client.setQueryData<TestSuite | null>(agentKeys.testSuite(id, versionId), currentSuite);
+      await client.invalidateQueries({ queryKey: agentKeys.testSuite(id, versionId) });
+    },
+  });
 }
 
 export function useCreateAgent() {

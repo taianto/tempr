@@ -1,4 +1,4 @@
-import { ApiError, type Agent, type AgentCreateInput, type AgentListResponse, type AgentUpdateInput, type AgentVersion, type AgentVersionListResponse, type ApiValidationError, type Classification, type VersionCreateInput } from "./types";
+import { ApiError, type Agent, type AgentCreateInput, type AgentListResponse, type AgentUpdateInput, type AgentVersion, type AgentVersionListResponse, type ApiValidationError, type Classification, type TestSuite, type TestSuiteGeneration, type VersionCreateInput } from "./types";
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
 
@@ -47,4 +47,6 @@ export const agentsApi = {
   getVersion: (id: string, versionId: string, signal?: AbortSignal) => request<AgentVersion>(`/agents/${encodeURIComponent(id)}/versions/${encodeURIComponent(versionId)}`, { signal }),
   createVersion: (id: string, version: VersionCreateInput) => request<AgentVersion>(`/agents/${encodeURIComponent(id)}/versions`, { method: "POST", body: version }),
   classify: (id: string, versionId: string, refresh = false) => request<Classification>(`/agents/${encodeURIComponent(id)}/versions/${encodeURIComponent(versionId)}/classify${refresh ? "?refresh=true" : ""}`, { method: "POST" }),
+  getTestSuite: (id: string, versionId: string, signal?: AbortSignal) => request<TestSuite | null>(`/agents/${encodeURIComponent(id)}/versions/${encodeURIComponent(versionId)}/test-suites`, { signal }),
+  generateTestSuite: (id: string, versionId: string, totalCount: number) => request<TestSuiteGeneration>(`/agents/${encodeURIComponent(id)}/versions/${encodeURIComponent(versionId)}/test-suites/generate`, { method: "POST", body: { total_count: totalCount } }),
 };

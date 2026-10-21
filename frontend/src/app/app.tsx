@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AgentsPage } from "@/features/agents/agents-page";
 import { AgentPage } from "@/features/agents/agent-page";
 import { ComparePage } from "@/features/agents/compare-page";
+import { TestSuitePage } from "@/features/agents/test-suite-page";
 
 export default function App() {
   return <BrowserRouter><Routes>
@@ -9,6 +10,7 @@ export default function App() {
     <Route path="/agents" element={<AgentsPage />} />
     <Route path="/agents/:agentId" element={<AgentPage />} />
     <Route path="/agents/:agentId/compare" element={<ComparePage />} />
+    <Route path="/agents/:agentId/versions/:versionId/test-suite" element={<TestSuitePage />} />
     <Route path="*" element={<Navigate to="/agents" replace />} />
   </Routes></BrowserRouter>;
 }

@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     openai_api_key: SecretStr | None = None
     classification_model: str = "gpt-6-luna"
     classification_timeout_seconds: float = Field(default=30.0, gt=0)
+    test_generation_model: str | None = None
+    test_generation_timeout_seconds: float = Field(default=120.0, gt=0)
 
 
 @lru_cache
