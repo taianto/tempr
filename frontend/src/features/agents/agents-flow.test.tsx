@@ -6,11 +6,12 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { AgentsPage } from "./agents-page";
 import { AgentPage } from "./agent-page";
 import { ComparePage } from "./compare-page";
+import { TestSuitePage } from "./test-suite-page";
 import { ClassificationPanel } from "./components/classification-panel";
 import { agentsApi } from "./api";
 import type { Agent, AgentVersion, Classification, ClassificationScores } from "./types";
 
-vi.mock("./api", () => ({ agentsApi: { list: vi.fn(), get: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn(), listVersions: vi.fn(), getVersion: vi.fn(), createVersion: vi.fn(), classify: vi.fn() } }));
+vi.mock("./api", () => ({ agentsApi: { list: vi.fn(), get: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn(), listVersions: vi.fn(), getVersion: vi.fn(), createVersion: vi.fn(), classify: vi.fn(), getTestSuite: vi.fn(), generateTestSuite: vi.fn() } }));
 
 const scoreKeys: (keyof ClassificationScores)[] = ["happy_path", "boundary_probe", "missing_information", "ambiguous_input", "prompt_injection", "policy_bypass", "sensitive_data_request", "hallucination_probe"];
 const scores: ClassificationScores = { happy_path: 0.5, boundary_probe: 0.5, missing_information: 0, ambiguous_input: 0, prompt_injection: 0, policy_bypass: 0, sensitive_data_request: 0, hallucination_probe: 0 };
@@ -26,7 +27,7 @@ let versionStore: Record<string, AgentVersion>;
 function LocationText() { const location = useLocation(); return <output data-testid="location">{location.pathname}{location.search}</output>; }
 function renderRoute(initialEntry: string) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity }, mutations: { retry: false } } });
-  return render(<QueryClientProvider client={client}><MemoryRouter initialEntries={[initialEntry]}><LocationText/><Routes><Route path="/agents" element={<AgentsPage/>}/><Route path="/agents/:agentId" element={<AgentPage/>}/><Route path="/agents/:agentId/compare" element={<ComparePage/>}/></Routes></MemoryRouter></QueryClientProvider>);
+  return render(<QueryClientProvider client={client}><MemoryRouter initialEntries={[initialEntry]}><LocationText/><Routes><Route path="/agents" element={<AgentsPage/>}/><Route path="/agents/:agentId" element={<AgentPage/>}/><Route path="/agents/:agentId/compare" element={<ComparePage/>}/><Route path="/agents/:agentId/versions/:versionId/test-suite" element={<TestSuitePage/>}/></Routes></MemoryRouter></QueryClientProvider>);
 }
 
 beforeEach(() => {
@@ -45,6 +46,7 @@ beforeEach(() => {
     versionStore[versionId] = { ...versionStore[versionId], classification: generated, classification_id: generated.id };
     return generated;
   });
+  vi.mocked(agentsApi.getTestSuite).mockResolvedValue(null);
 });
 
 describe("versioned agent workspace", () => {
@@ -72,14 +74,14 @@ describe("versioned agent workspace", () => {
     expect(chart!.querySelector('[data-category="happy_path"]')?.textContent).toContain("13%");
     expect(confirm).toHaveBeenCalled();
     expect([...chart!.querySelectorAll("[data-category]")].map((row) => row.getAttribute("data-category")).slice(0, 3)).toEqual(["happy_path", "boundary_probe", "missing_information"]);
-    expect(chart!.querySelector('[data-category="happy_path"] > div:nth-child(2) > div')?.getAttribute("style")).toContain("width: 12.5%");
+    expect(chart!.querySelector('[data-category="happy_path"] > div:nth-child(2) > div > div')?.getAttribute("style")).toContain("width: 12.5%");
     confirm.mockRestore();
   });
 
   it("renders zero weight categories with zero width and labels independent of color", () => {
     const client = new QueryClient();
     const { container } = render(<QueryClientProvider client={client}><ClassificationPanel agentId="agt-1" version={v1}/></QueryClientProvider>);
-    expect(container.querySelector('[data-category="missing_information"] > div:nth-child(2) > div')?.getAttribute("style")).toContain("width: 0%");
+    expect(container.querySelector('[data-category="missing_information"] > div:nth-child(2) > div > div')?.getAttribute("style")).toContain("width: 0%");
     expect(screen.getByText("Missing information")).toBeInTheDocument();
     client.clear();
   });
@@ -151,6 +153,66 @@ describe("versioned agent workspace", () => {
     renderRoute("/agents/agt-1/compare");
     await waitFor(() => expect(screen.getByTestId("location")).toHaveTextContent("versions=agv-2"));
     expect(await screen.findByRole("columnheader", { name: /version 2\.0-beta/i })).toBeInTheDocument();
+  });
+
+  it("opens a version's suite page and classifies before generating when needed", async () => {
+    const user = userEvent.setup();
+    const completedSuite = {
+      id: "ts-1", version_id: "agv-2", status: "completed" as const, requested_count: 2,
+      allocation: { happy_path: 1, boundary_probe: 1 }, has_completed_suite: true, error: null,
+      created_at: "2026-10-20T10:00:00Z", updated_at: "2026-10-20T10:00:00Z",
+      generated_at: "2026-10-20T10:00:00Z", items: [
+        { category: "happy_path" as const, question: "Can I get help?", expected_behavior: "Offer relevant help." },
+      ],
+    };
+    vi.mocked(agentsApi.generateTestSuite).mockResolvedValue(completedSuite);
+    vi.mocked(agentsApi.getTestSuite).mockResolvedValueOnce(null).mockResolvedValue(completedSuite);
+    renderRoute("/agents/agt-1");
+    await user.click(await screen.findByRole("link", { name: "Test suite for version 2.0-beta" }));
+    expect(await screen.findByRole("heading", { name: "Test suite · v2.0-beta" })).toBeInTheDocument();
+    const count = screen.getByLabelText("Number of questions");
+    await user.clear(count);
+    await user.type(count, "2");
+    await user.click(screen.getByRole("button", { name: "Generate test suite" }));
+    await waitFor(() => expect(agentsApi.classify).toHaveBeenCalledWith("agt-1", "agv-2", false));
+    await waitFor(() => expect(agentsApi.generateTestSuite).toHaveBeenCalledWith("agt-1", "agv-2", 2));
+    expect(await screen.findByText("Can I get help?")).toBeInTheDocument();
+    expect(screen.getByText("Offer relevant help.")).toBeInTheDocument();
+  });
+
+  it("shows a saved suite on direct navigation without starting generation", async () => {
+    const savedSuite = {
+      id: "ts-saved", version_id: "agv-1", status: "completed" as const, requested_count: 1,
+      allocation: { happy_path: 1 }, has_completed_suite: true, error: null,
+      created_at: "2026-10-20T10:00:00Z", updated_at: "2026-10-20T10:00:00Z",
+      generated_at: "2026-10-20T10:00:00Z",
+      items: [{ category: "happy_path" as const, question: "Saved question", expected_behavior: "Saved criteria" }],
+    };
+    vi.mocked(agentsApi.getTestSuite).mockResolvedValue(savedSuite);
+    renderRoute("/agents/agt-1/versions/agv-1/test-suite");
+    expect(await screen.findByText("Saved question")).toBeInTheDocument();
+    expect(agentsApi.generateTestSuite).not.toHaveBeenCalled();
+  });
+
+  it("shows the saved count when regenerating and keeps the suite when confirmation is cancelled", async () => {
+    const user = userEvent.setup();
+    const savedSuite = {
+      id: "ts-saved", version_id: "agv-1", status: "completed" as const, requested_count: 7,
+      allocation: { happy_path: 7 }, has_completed_suite: true, error: null,
+      created_at: "2026-10-20T10:00:00Z", updated_at: "2026-10-20T10:00:00Z",
+      generated_at: "2026-10-20T10:00:00Z",
+      items: [{ category: "happy_path" as const, question: "Saved question", expected_behavior: "Saved criteria" }],
+    };
+    vi.mocked(agentsApi.getTestSuite).mockResolvedValue(savedSuite);
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    renderRoute("/agents/agt-1/versions/agv-1/test-suite");
+    await screen.findByText("Saved question");
+    await user.click(screen.getByRole("button", { name: "Regenerate suite" }));
+    expect(screen.getByLabelText("Number of questions")).toHaveValue(7);
+    await user.click(screen.getByRole("button", { name: "Confirm regeneration" }));
+    expect(confirm).toHaveBeenCalled();
+    expect(agentsApi.generateTestSuite).not.toHaveBeenCalled();
+    confirm.mockRestore();
   });
 
   it("submits agent creation with the nested initial version contract", async () => {

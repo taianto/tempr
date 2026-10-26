@@ -13,6 +13,18 @@ def _config(database_url: str) -> Config:
     return config
 
 
+def test_migrations_match_current_models(tmp_path, monkeypatch):
+    url = f"sqlite:///{tmp_path / 'schema.db'}"
+    monkeypatch.setenv("DATABASE_URL", url)
+    get_settings.cache_clear()
+    try:
+        config = _config(url)
+        command.upgrade(config, "head")
+        command.check(config)
+    finally:
+        get_settings.cache_clear()
+
+
 def test_migration_backfills_existing_and_deleted_agents(tmp_path, monkeypatch):
     database = tmp_path / "legacy.db"
     url = f"sqlite:///{database}"
