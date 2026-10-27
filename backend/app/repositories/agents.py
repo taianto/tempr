@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
@@ -51,7 +51,9 @@ class AgentRepository:
         )
         agent = self.db.execute(stmt).unique().scalar_one_or_none()
         if agent is not None:
-            agent.versions.sort(key=lambda item: (item.created_at, item.id), reverse=True)
+            agent.versions.sort(
+                key=lambda item: (item.created_at, item.id), reverse=True
+            )
         return agent
 
     def list(self) -> tuple[list[Agent], int]:
@@ -63,16 +65,20 @@ class AgentRepository:
         )
         items = list(self.db.execute(stmt).unique().scalars().all())
         for agent in items:
-            agent.versions.sort(key=lambda item: (item.created_at, item.id), reverse=True)
+            agent.versions.sort(
+                key=lambda item: (item.created_at, item.id), reverse=True
+            )
         return items, len(items)
 
     def versions(self, agent_id: str) -> list[AgentVersion]:
-        return list(self.db.scalars(
-            select(AgentVersion)
-            .where(AgentVersion.agent_id == agent_id)
-            .options(joinedload(AgentVersion.classification))
-            .order_by(AgentVersion.created_at.desc(), AgentVersion.id.desc())
-        ).all())
+        return list(
+            self.db.scalars(
+                select(AgentVersion)
+                .where(AgentVersion.agent_id == agent_id)
+                .options(joinedload(AgentVersion.classification))
+                .order_by(AgentVersion.created_at.desc(), AgentVersion.id.desc())
+            ).all()
+        )
 
     def get_version(self, agent_id: str, version_id: str) -> AgentVersion | None:
         return self.db.scalar(
@@ -83,7 +89,9 @@ class AgentRepository:
 
     def create_version(self, agent: Agent, data: dict[str, Any]) -> AgentVersion:
         version = AgentVersion(
-            id=_id("agv"), agent_id=agent.id, version=data["version"],
+            id=_id("agv"),
+            agent_id=agent.id,
+            version=data["version"],
             **self._version_values(data["schema"]),
         )
         self.db.add(version)
@@ -96,11 +104,11 @@ class AgentRepository:
 
     def update_name(self, agent: Agent, name: str) -> Agent:
         agent.name = name
-        agent.updated_at = datetime.now(timezone.utc)
+        agent.updated_at = datetime.now(UTC)
         self.db.commit()
         return self.get(agent.id)  # type: ignore[return-value]
 
     def soft_delete(self, agent: Agent) -> None:
-        agent.deleted_at = datetime.now(timezone.utc)
+        agent.deleted_at = datetime.now(UTC)
         agent.updated_at = agent.deleted_at
         self.db.commit()

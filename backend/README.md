@@ -51,10 +51,20 @@ The initial label defaults to `1.0`. Versions are immutable; add a schema revisi
 
 Classify or retrieve a specific version with `POST /api/v1/agents/{agent_id}/versions/{version_id}/classify` and `GET /api/v1/agents/{agent_id}/versions/{version_id}/classification`. Classification is saved against that immutable version and reused on later requests. Add `?refresh=true` to classify again and replace its saved scores. Scores are normalized to four decimal places and total `1.0000`. The classifier analyzes the version definition; it does not run the agent. Existing agent schemas are migrated to version `1.0`.
 
-## Tests
+## Development checks
 
 ```bash
-pytest
+python -m pytest
+python -m ruff check .
+python -m ruff format --check .
 ```
 
-Tests use an isolated in-memory SQLite database and do not access the configured local database.
+Install the development dependencies, including Ruff, with `pip install -e '.[dev]'`.
+Apply safe lint fixes and formatting with:
+
+```bash
+python -m ruff check . --fix
+python -m ruff format .
+```
+
+Tests use isolated SQLite databases and mocked model calls; they do not access the configured local database or call the classification provider.

@@ -10,13 +10,13 @@ from app.schemas.agent import (
     AgentListItem,
     AgentListResponse,
     AgentResponse,
+    AgentSchema,
     AgentUpdate,
     AgentVersionListResponse,
     AgentVersionResponse,
     AgentVersionSummary,
     ClassificationResponse,
     PromptConfig,
-    AgentSchema,
     VersionCreate,
 )
 from app.schemas.classification import Classification as ClassificationScores

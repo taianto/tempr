@@ -27,6 +27,6 @@ def prepare_database_path(database_url: str) -> None:
     """Create the parent directory for a relative SQLite database URL."""
     prefix = "sqlite:///"
     if database_url.startswith(prefix) and not database_url.startswith("sqlite:////"):
-        path = Path(database_url[len(prefix):])
+        path = Path(database_url[len(prefix) :])
         if path.name:
             path.parent.mkdir(parents=True, exist_ok=True)

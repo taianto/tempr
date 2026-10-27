@@ -4,9 +4,133 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { Skeleton } from "@/components/ui/skeleton";
 import { useVersion } from "../hooks/use-agents";
 
-export function AgentDetails({ agentId, versionId, open, onOpenChange }: { agentId: string; versionId: string | null; open: boolean; onOpenChange: (open: boolean) => void }) {
+export function AgentDetails({
+  agentId,
+  versionId,
+  open,
+  onOpenChange,
+}: {
+  agentId: string;
+  versionId: string | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
   const query = useVersion(agentId, versionId ?? "");
-  return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent aria-describedby="version-details-description" className="max-w-xl">
-    {query.isLoading ? <div className="space-y-5 pt-8"><Skeleton className="h-12 w-12"/><Skeleton className="h-7 w-2/3"/><Skeleton className="h-20 w-full"/></div> : query.isError ? <div className="pt-10"><DialogTitle>Could not load version</DialogTitle><DialogDescription className="mt-2">{query.error.message}</DialogDescription><Button className="mt-4" variant="outline" onClick={() => void query.refetch()}>Try again</Button></div> : query.data ? <div className="pt-8"><div className="flex items-start gap-4"><span className="flex h-12 w-12 items-center justify-center rounded-[14px] bg-indigo-50 text-indigo-600"><Bot size={24}/></span><div><p className="text-xs font-medium text-indigo-700">Immutable version</p><DialogTitle className="mt-1 text-2xl font-semibold">Version {query.data.version}</DialogTitle></div></div><DialogDescription id="version-details-description" className="mt-4 text-sm leading-6 text-slate-500">{query.data.schema.description || "No description provided."}</DialogDescription><div className="mt-7 space-y-6"><section><h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-400"><Cpu size={14}/>Model</h3><div className="mt-3 rounded-xl border border-slate-200 bg-slate-50/60 p-4">{query.data.schema.model ? <><p className="text-sm font-medium">{query.data.schema.model.name}</p><p className="mt-1 text-xs capitalize text-slate-500">{query.data.schema.model.provider}</p>{Object.keys(query.data.schema.model.parameters ?? {}).length > 0 && <pre className="mt-3 overflow-x-auto text-xs leading-5 text-slate-500">{JSON.stringify(query.data.schema.model.parameters, null, 2)}</pre>}</> : <p className="text-sm text-slate-500">No model configuration provided.</p>}</div></section><section><h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-400"><Code2 size={14}/>System prompt</h3><pre className="mt-3 max-h-56 overflow-auto whitespace-pre-wrap break-words rounded-xl border border-slate-200 bg-slate-50/60 p-4 font-sans text-sm leading-6 text-slate-600">{query.data.schema.prompt.system}</pre></section>{query.data.schema.prompt.developer && <section><h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Developer prompt</h3><pre className="mt-3 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-xl border border-slate-200 bg-slate-50/60 p-4 font-sans text-sm leading-6 text-slate-600">{query.data.schema.prompt.developer}</pre></section>}<section><h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-400"><Wrench size={14}/>Tools</h3>{query.data.schema.tools?.length ? <div className="mt-3 space-y-2">{query.data.schema.tools.map((tool) => <div key={tool.name} className="rounded-xl border border-slate-200 p-4"><p className="text-sm font-medium">{tool.name}</p>{tool.description && <p className="mt-1 text-sm text-slate-500">{tool.description}</p>}</div>)}</div> : <p className="mt-3 rounded-xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">No tools configured.</p>}</section>{query.data.schema.metadata && Object.keys(query.data.schema.metadata).length > 0 && <section><h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Metadata</h3><pre className="mt-3 overflow-x-auto rounded-xl border border-slate-200 bg-slate-50/60 p-4 text-xs leading-5 text-slate-600">{JSON.stringify(query.data.schema.metadata, null, 2)}</pre></section>}</div></div> : null}
-  </DialogContent></Dialog>;
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent aria-describedby="version-details-description" className="max-w-xl">
+        {query.isLoading ? (
+          <div className="space-y-5 pt-8">
+            <Skeleton className="h-12 w-12" />
+            <Skeleton className="h-7 w-2/3" />
+            <Skeleton className="h-20 w-full" />
+          </div>
+        ) : query.isError ? (
+          <div className="pt-10">
+            <DialogTitle>Could not load version</DialogTitle>
+            <DialogDescription className="mt-2">{query.error.message}</DialogDescription>
+            <Button className="mt-4" variant="outline" onClick={() => void query.refetch()}>
+              Try again
+            </Button>
+          </div>
+        ) : query.data ? (
+          <div className="pt-8">
+            <div className="flex items-start gap-4">
+              <span className="flex h-12 w-12 items-center justify-center rounded-[14px] bg-indigo-50 text-indigo-600">
+                <Bot size={24} />
+              </span>
+              <div>
+                <p className="text-xs font-medium text-indigo-700">Immutable version</p>
+                <DialogTitle className="mt-1 text-2xl font-semibold">
+                  Version {query.data.version}
+                </DialogTitle>
+              </div>
+            </div>
+            <DialogDescription
+              id="version-details-description"
+              className="mt-4 text-sm leading-6 text-slate-500"
+            >
+              {query.data.schema.description || "No description provided."}
+            </DialogDescription>
+            <div className="mt-7 space-y-6">
+              <section>
+                <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
+                  <Cpu size={14} />
+                  Model
+                </h3>
+                <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+                  {query.data.schema.model ? (
+                    <>
+                      <p className="text-sm font-medium">{query.data.schema.model.name}</p>
+                      <p className="mt-1 text-xs capitalize text-slate-500">
+                        {query.data.schema.model.provider}
+                      </p>
+                      {Object.keys(query.data.schema.model.parameters ?? {}).length > 0 && (
+                        <pre className="mt-3 overflow-x-auto text-xs leading-5 text-slate-500">
+                          {JSON.stringify(query.data.schema.model.parameters, null, 2)}
+                        </pre>
+                      )}
+                    </>
+                  ) : (
+                    <p className="text-sm text-slate-500">No model configuration provided.</p>
+                  )}
+                </div>
+              </section>
+              <section>
+                <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
+                  <Code2 size={14} />
+                  System prompt
+                </h3>
+                <pre className="mt-3 max-h-56 overflow-auto whitespace-pre-wrap break-words rounded-xl border border-slate-200 bg-slate-50/60 p-4 font-sans text-sm leading-6 text-slate-600">
+                  {query.data.schema.prompt.system}
+                </pre>
+              </section>
+              {query.data.schema.prompt.developer && (
+                <section>
+                  <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
+                    Developer prompt
+                  </h3>
+                  <pre className="mt-3 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-xl border border-slate-200 bg-slate-50/60 p-4 font-sans text-sm leading-6 text-slate-600">
+                    {query.data.schema.prompt.developer}
+                  </pre>
+                </section>
+              )}
+              <section>
+                <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
+                  <Wrench size={14} />
+                  Tools
+                </h3>
+                {query.data.schema.tools?.length ? (
+                  <div className="mt-3 space-y-2">
+                    {query.data.schema.tools.map((tool) => (
+                      <div key={tool.name} className="rounded-xl border border-slate-200 p-4">
+                        <p className="text-sm font-medium">{tool.name}</p>
+                        {tool.description && (
+                          <p className="mt-1 text-sm text-slate-500">{tool.description}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-3 rounded-xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">
+                    No tools configured.
+                  </p>
+                )}
+              </section>
+              {query.data.schema.metadata && Object.keys(query.data.schema.metadata).length > 0 && (
+                <section>
+                  <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
+                    Metadata
+                  </h3>
+                  <pre className="mt-3 overflow-x-auto rounded-xl border border-slate-200 bg-slate-50/60 p-4 text-xs leading-5 text-slate-600">
+                    {JSON.stringify(query.data.schema.metadata, null, 2)}
+                  </pre>
+                </section>
+              )}
+            </div>
+          </div>
+        ) : null}
+      </DialogContent>
+    </Dialog>
+  );
 }

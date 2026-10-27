@@ -1,5 +1,6 @@
 import math
-from decimal import Decimal, ROUND_FLOOR
+from decimal import ROUND_FLOOR, Decimal
+from typing import Annotated
 
 import httpx
 from fastapi import Depends
@@ -16,7 +17,8 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.db.database import get_db
-from app.db.models import AgentVersion, Classification as ClassificationRecord
+from app.db.models import AgentVersion
+from app.db.models import Classification as ClassificationRecord
 from app.prompts.classification import CLASSIFICATION_SYSTEM_PROMPT
 from app.repositories.classifications import ClassificationRepository
 from app.schemas.classification import Classification as ClassificationScores
@@ -33,7 +35,7 @@ class ClassificationServiceError(Exception):
 class ClassificationService:
     """Classify agent versions and persist the resulting scores."""
 
-    def __init__(self, db: Session = Depends(get_db)) -> None:
+    def __init__(self, db: Annotated[Session, Depends(get_db)]) -> None:
         self.db = db
         self.settings = get_settings()
         self.repository = ClassificationRepository(db)
@@ -56,9 +58,7 @@ class ClassificationService:
     def _call_model(self, agent: AgentVersion) -> dict[str, float]:
         api_key = self.settings.openai_api_key
         if api_key is None or not api_key.get_secret_value().strip():
-            raise ClassificationServiceError(
-                503, "Classification is not configured"
-            )
+            raise ClassificationServiceError(503, "Classification is not configured")
 
         try:
             model = ChatOpenAI(
@@ -89,9 +89,7 @@ class ClassificationService:
         except ClassificationServiceError:
             raise
         except (APITimeoutError, httpx.TimeoutException, TimeoutError) as exc:
-            raise ClassificationServiceError(
-                504, "Classification timed out"
-            ) from exc
+            raise ClassificationServiceError(504, "Classification timed out") from exc
         except (APIConnectionError, RateLimitError, InternalServerError) as exc:
             raise ClassificationServiceError(
                 503, "The classification provider is temporarily unavailable"

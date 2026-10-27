@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from sqlalchemy import select, update
@@ -62,7 +62,7 @@ class ClassificationRepository:
                 for key, value in scores.items():
                     setattr(classification, key, value)
                 classification.classifier_model = model
-                classification.updated_at = datetime.now(timezone.utc)
+                classification.updated_at = datetime.now(UTC)
             self.db.commit()
             return classification
         except Exception:
