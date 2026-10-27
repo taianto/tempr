@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from sqlalchemy import select, update
@@ -17,7 +17,6 @@ class ClassificationRepository:
 
     def save(
         self,
-        agent_id: str,
         version_id: str,
         scores: dict[str, float],
         model: str,
@@ -25,6 +24,12 @@ class ClassificationRepository:
     ) -> Classification | None:
         """Save scores while serializing against soft deletion and concurrent refreshes."""
         try:
+            agent_id = self.db.scalar(
+                select(AgentVersion.agent_id).where(AgentVersion.id == version_id)
+            )
+            if agent_id is None:
+                self.db.rollback()
+                return None
             active = self.db.execute(
                 update(Agent)
                 .where(Agent.id == agent_id, Agent.deleted_at.is_(None))
@@ -62,9 +67,20 @@ class ClassificationRepository:
                 for key, value in scores.items():
                     setattr(classification, key, value)
                 classification.classifier_model = model
-                classification.updated_at = datetime.now(timezone.utc)
+                classification.updated_at = datetime.now(UTC)
             self.db.commit()
             return classification
         except Exception:
             self.db.rollback()
             raise
+
+    def get(self, classification_id: str) -> Classification | None:
+        return self.db.scalar(
+            select(Classification)
+            .join(AgentVersion, AgentVersion.classification_id == Classification.id)
+            .join(Agent, Agent.id == AgentVersion.agent_id)
+            .where(
+                Classification.id == classification_id,
+                Agent.deleted_at.is_(None),
+            )
+        )

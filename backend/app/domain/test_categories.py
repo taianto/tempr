@@ -2,7 +2,6 @@
 
 from typing import Literal, get_args
 
-
 TestCategory = Literal[
     "happy_path",
     "boundary_probe",

@@ -38,7 +38,9 @@ def test_categories_validate_scores_and_generated_suite_items(category):
         with pytest.raises(ValidationError):
             Classification(**(scores | {category: invalid}))
     with pytest.raises(ValidationError):
-        Classification(**{key: value for key, value in scores.items() if key != category})
+        Classification(
+            **{key: value for key, value in scores.items() if key != category}
+        )
     with pytest.raises(ValidationError):
         Classification(**(scores | {"unknown_category": 0.5}))
 
@@ -48,5 +50,7 @@ def test_categories_validate_scores_and_generated_suite_items(category):
     assert item.model_dump(mode="json")["category"] == category
     with pytest.raises(ValidationError):
         GeneratedTestSuiteItem(
-            category="unknown_category", question="A question", expected_behavior="An answer"
+            category="unknown_category",
+            question="A question",
+            expected_behavior="An answer",
         )

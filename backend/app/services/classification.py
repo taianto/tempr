@@ -1,5 +1,6 @@
 import math
-from decimal import Decimal, ROUND_FLOOR
+from decimal import ROUND_FLOOR, Decimal
+from typing import Annotated
 
 import httpx
 from fastapi import Depends
@@ -16,11 +17,12 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.db.database import get_db
-from app.db.models import AgentVersion, Classification as ClassificationRecord
+from app.db.models import AgentVersion
+from app.db.models import Classification as ClassificationRecord
 from app.prompts.classification import CLASSIFICATION_SYSTEM_PROMPT
 from app.repositories.classifications import ClassificationRepository
 from app.schemas.classification import Classification as ClassificationScores
-from app.services.agents import AgentService
+from app.services.versions import VersionService
 
 
 class ClassificationServiceError(Exception):
@@ -33,32 +35,34 @@ class ClassificationServiceError(Exception):
 class ClassificationService:
     """Classify agent versions and persist the resulting scores."""
 
-    def __init__(self, db: Session = Depends(get_db)) -> None:
+    def __init__(self, db: Annotated[Session, Depends(get_db)]) -> None:
         self.db = db
         self.settings = get_settings()
         self.repository = ClassificationRepository(db)
 
-    def classify(
-        self, agent_id: str, version_id: str, refresh: bool = False
-    ) -> ClassificationRecord:
-        version = AgentService(self.db).get_version(agent_id, version_id)
+    def classify(self, version_id: str, refresh: bool = False) -> ClassificationRecord:
+        version = VersionService(self.db).get(version_id)
         if version.classification is not None and not refresh:
             return version.classification
 
         values = self._call_model(version)
         saved = self.repository.save(
-            agent_id, version_id, values, self.settings.classification_model, refresh
+            version_id, values, self.settings.classification_model, refresh
         )
         if saved is None:
             raise ClassificationServiceError(404, "Agent or version not found")
         return saved
 
+    def get(self, classification_id: str) -> ClassificationRecord:
+        classification = self.repository.get(classification_id)
+        if classification is None:
+            raise ClassificationServiceError(404, "Classification not found")
+        return classification
+
     def _call_model(self, agent: AgentVersion) -> dict[str, float]:
         api_key = self.settings.openai_api_key
         if api_key is None or not api_key.get_secret_value().strip():
-            raise ClassificationServiceError(
-                503, "Classification is not configured"
-            )
+            raise ClassificationServiceError(503, "Classification is not configured")
 
         try:
             model = ChatOpenAI(
@@ -89,9 +93,7 @@ class ClassificationService:
         except ClassificationServiceError:
             raise
         except (APITimeoutError, httpx.TimeoutException, TimeoutError) as exc:
-            raise ClassificationServiceError(
-                504, "Classification timed out"
-            ) from exc
+            raise ClassificationServiceError(504, "Classification timed out") from exc
         except (APIConnectionError, RateLimitError, InternalServerError) as exc:
             raise ClassificationServiceError(
                 503, "The classification provider is temporarily unavailable"

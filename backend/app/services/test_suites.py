@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -10,7 +10,7 @@ from app.db.models import Classification, TestSuite
 from app.domain.apportionment import hamilton_apportion
 from app.domain.test_categories import TEST_CATEGORIES
 from app.repositories.test_suites import TestSuiteRepository
-from app.services.agents import AgentService
+from app.services.versions import VersionService
 
 
 class TestSuiteServiceError(Exception):
@@ -22,38 +22,52 @@ class TestSuiteServiceError(Exception):
 
 class TestSuiteService:
     def __init__(
-        self, db: Session = Depends(get_db), settings: Settings = Depends(get_settings)
+        self,
+        db: Annotated[Session, Depends(get_db)],
+        settings: Annotated[Settings, Depends(get_settings)],
     ) -> None:
         self.db = db
         self.settings = settings
         self.repository = TestSuiteRepository(db)
 
-    def get(self, agent_id: str, version_id: str) -> TestSuite | None:
+    def get(self, version_id: str) -> TestSuite | None:
         try:
-            AgentService(self.db).get_version(agent_id, version_id)
+            VersionService(self.db).get(version_id)
         except HTTPException as exc:
             raise TestSuiteServiceError(exc.status_code, exc.detail) from exc
         return self.repository.get(version_id)
 
-    def generate(
-        self, agent_id: str, version_id: str, total_count: int
-    ) -> TestSuite:
-        version = AgentService(self.db).get_version(agent_id, version_id)
+    def generate(self, version_id: str, total_count: int) -> TestSuite:
+        try:
+            version = VersionService(self.db).get(version_id)
+        except HTTPException as exc:
+            raise TestSuiteServiceError(exc.status_code, exc.detail) from exc
         classification = version.classification
         if classification is None:
-            raise TestSuiteServiceError(409, "Classify this agent version before generating a test suite")
+            raise TestSuiteServiceError(
+                409, "Classify this agent version before generating a test suite"
+            )
 
         api_key = self.settings.openai_api_key
         if api_key is None or not api_key.get_secret_value().strip():
-            raise TestSuiteServiceError(503, "Test suite generation is not configured: please set up LLM API key")
+            raise TestSuiteServiceError(
+                503,
+                "Test suite generation is not configured: please set up LLM API key",
+            )
 
-        scores = {name: float(getattr(classification, name)) for name in TEST_CATEGORIES}
+        scores = {
+            name: float(getattr(classification, name)) for name in TEST_CATEGORIES
+        }
         try:
             allocation = hamilton_apportion(scores, total_count)
         except ValueError as exc:
-            raise TestSuiteServiceError(409, "The saved classification has invalid category weights") from exc
+            raise TestSuiteServiceError(
+                409, "The saved classification has invalid category weights"
+            ) from exc
 
-        request = self._get_suite_metadata(classification, total_count, scores, allocation)
+        request = self._get_suite_metadata(
+            classification, total_count, scores, allocation
+        )
         try:
             record = self.repository.enqueue(version_id, request)
         except ValueError as exc:
@@ -61,8 +75,14 @@ class TestSuiteService:
         if record is None:
             raise TestSuiteServiceError(404, "Agent version not found")
         return record
-    
-    def _get_suite_metadata(self, classification: Classification, total_count: int, scores: dict[str, float], allocation: dict[str, int]):
+
+    def _get_suite_metadata(
+        self,
+        classification: Classification,
+        total_count: int,
+        scores: dict[str, float],
+        allocation: dict[str, int],
+    ):
         return {
             "total_count": total_count,
             "classification_id": classification.id,
@@ -70,7 +90,8 @@ class TestSuiteService:
             "classification_model": classification.classifier_model,
             "classification_scores": scores,
             "allocation": allocation,
-            "model": self.settings.test_generation_model or self.settings.classification_model,
+            "model": self.settings.test_generation_model
+            or self.settings.classification_model,
         }
 
 

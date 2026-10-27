@@ -8,7 +8,16 @@ from sqlalchemy.pool import StaticPool
 
 from app.config import Settings, get_settings
 from app.db.database import get_db
-from app.db.models import Agent, AgentVersion, Base, Classification, TestSuite as SuiteRecord, utc_now
+from app.db.models import (
+    Agent,
+    AgentVersion,
+    Base,
+    Classification,
+    utc_now,
+)
+from app.db.models import (
+    TestSuite as SuiteRecord,
+)
 from app.domain.test_categories import TEST_CATEGORIES
 from app.main import app
 from app.prompts.test_suites import TEST_SUITE_SYSTEM_PROMPT
@@ -24,15 +33,27 @@ def suite_environment(monkeypatch):
     sessions = sessionmaker(bind=engine, expire_on_commit=False)
     Base.metadata.create_all(engine)
     with sessions() as db:
-        db.add(Agent(
-            id="agt_suite", name="Suite agent", versions=[AgentVersion(
-                id="agv_suite", version="1.0", system_prompt="Handle refunds.",
-                classification=Classification(
-                    id="cls_suite", classifier_model="test",
-                    **(dict.fromkeys(TEST_CATEGORIES, 0.0) | {"happy_path": 1.0}),
-                ),
-            )],
-        ))
+        db.add(
+            Agent(
+                id="agt_suite",
+                name="Suite agent",
+                versions=[
+                    AgentVersion(
+                        id="agv_suite",
+                        version="1.0",
+                        system_prompt="Handle refunds.",
+                        classification=Classification(
+                            id="cls_suite",
+                            classifier_model="test",
+                            **(
+                                dict.fromkeys(TEST_CATEGORIES, 0.0)
+                                | {"happy_path": 1.0}
+                            ),
+                        ),
+                    )
+                ],
+            )
+        )
         db.commit()
 
     def override_get_db():
@@ -54,9 +75,10 @@ def suite_environment(monkeypatch):
         engine.dispose()
 
 
-GENERATION_PATH = "/api/v1/agents/agt_suite/versions/agv_suite/test-suites/generate"
+GENERATION_PATH = "/api/v1/versions/agv_suite/test-suites/generate"
 SUITE_ITEM = {
-    "category": "happy_path", "question": "Can I get a refund?",
+    "category": "happy_path",
+    "question": "Can I get a refund?",
     "expected_behavior": "Explain the refund process.",
 }
 
@@ -83,23 +105,32 @@ def test_generate_suite_persists_items(suite_environment, structured):
     provider.return_value.with_structured_output.assert_called_once_with(
         GeneratedTestSuite, method="json_schema", strict=True
     )
-    messages = provider.return_value.with_structured_output.return_value.invoke.call_args.args[0]
+    messages = (
+        provider.return_value.with_structured_output.return_value.invoke.call_args.args[
+            0
+        ]
+    )
     assert messages[0] == ("system", TEST_SUITE_SYSTEM_PROMPT)
-    operation = client.get("/openapi.json").json()["paths"][GENERATION_PATH.replace(
-        "agt_suite", "{agent_id}"
-    ).replace("agv_suite", "{version_id}")]["post"]
+    operation = client.get("/openapi.json").json()["paths"][
+        GENERATION_PATH.replace("agv_suite", "{version_id}")
+    ]["post"]
     assert operation["tags"] == ["test suites"]
     assert operation["operationId"].startswith("generate_test_suite_")
 
 
-@pytest.mark.parametrize("items", [
-    [],
-    [SUITE_ITEM | {"category": "boundary_probe"}],
-    [SUITE_ITEM | {"question": "   "}],
-])
+@pytest.mark.parametrize(
+    "items",
+    [
+        [],
+        [SUITE_ITEM | {"category": "boundary_probe"}],
+        [SUITE_ITEM | {"question": "   "}],
+    ],
+)
 def test_invalid_generated_suite_fails_job(suite_environment, items):
     client, sessions, provider = suite_environment
-    provider.return_value.with_structured_output.return_value.invoke.return_value = {"items": items}
+    provider.return_value.with_structured_output.return_value.invoke.return_value = {
+        "items": items
+    }
 
     response = client.post(GENERATION_PATH, json={"total_count": 1})
     assert response.status_code == 202
@@ -113,7 +144,7 @@ def test_invalid_generated_suite_fails_job(suite_environment, items):
 def test_get_suite_returns_null_when_version_has_no_suite(suite_environment):
     client, _, _ = suite_environment
 
-    response = client.get("/api/v1/agents/agt_suite/versions/agv_suite/test-suites")
+    response = client.get("/api/v1/versions/agv_suite/test-suites")
 
     assert response.status_code == 200
     assert response.json() is None
@@ -122,14 +153,21 @@ def test_get_suite_returns_null_when_version_has_no_suite(suite_environment):
 def test_get_suite_returns_generated_items_and_status(suite_environment):
     client, sessions, _ = suite_environment
     with sessions() as db:
-        db.add(SuiteRecord(
-            id="ts_saved", version_id="agv_suite", status="completed",
-            request_json={"total_count": 1, "allocation": {"happy_path": 1}},
-            result_json={"items": [SUITE_ITEM], "generated_at": "2026-10-20T12:00:00+00:00"},
-        ))
+        db.add(
+            SuiteRecord(
+                id="ts_saved",
+                version_id="agv_suite",
+                status="completed",
+                request_json={"total_count": 1, "allocation": {"happy_path": 1}},
+                result_json={
+                    "items": [SUITE_ITEM],
+                    "generated_at": "2026-10-20T12:00:00+00:00",
+                },
+            )
+        )
         db.commit()
 
-    response = client.get("/api/v1/agents/agt_suite/versions/agv_suite/test-suites")
+    response = client.get("/api/v1/versions/agv_suite/test-suites")
 
     assert response.status_code == 200
     body = response.json()
@@ -142,11 +180,8 @@ def test_get_suite_returns_generated_items_and_status(suite_environment):
 def test_get_suite_rejects_missing_or_mismatched_version(suite_environment):
     client, _, _ = suite_environment
 
-    missing = client.get("/api/v1/agents/agt_suite/versions/unknown/test-suites")
-    mismatched = client.get("/api/v1/agents/missing/versions/agv_suite/test-suites")
-
+    missing = client.get("/api/v1/versions/unknown/test-suites")
     assert missing.status_code == 404
-    assert mismatched.status_code == 404
 
 
 def test_get_suite_rejects_deleted_agent(suite_environment):
@@ -155,6 +190,6 @@ def test_get_suite_rejects_deleted_agent(suite_environment):
         db.get(Agent, "agt_suite").deleted_at = utc_now()
         db.commit()
 
-    response = client.get("/api/v1/agents/agt_suite/versions/agv_suite/test-suites")
+    response = client.get("/api/v1/versions/agv_suite/test-suites")
 
     assert response.status_code == 404

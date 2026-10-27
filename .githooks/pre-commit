@@ -1,0 +1,25 @@
+#!/bin/sh
+set -eu
+
+repo_root=$(git rev-parse --show-toplevel)
+
+echo "Checking frontend with Biome..."
+(
+    cd "$repo_root/frontend"
+    npm run check
+)
+
+echo "Checking backend with Ruff..."
+(
+    cd "$repo_root/backend"
+    if [ -x .venv/bin/python ]; then
+        python=.venv/bin/python
+    elif command -v python3 >/dev/null 2>&1; then
+        python=python3
+    else
+        python=python
+    fi
+
+    "$python" -m ruff check .
+    "$python" -m ruff format --check .
+)

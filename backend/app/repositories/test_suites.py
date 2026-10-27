@@ -17,7 +17,9 @@ class TestSuiteRepository:
         self.db = db
 
     def get_for_version(self, version_id: str) -> TestSuite | None:
-        return self.db.scalar(select(TestSuite).where(TestSuite.version_id == version_id))
+        return self.db.scalar(
+            select(TestSuite).where(TestSuite.version_id == version_id)
+        )
 
     def get(self, version_id: str) -> TestSuite | None:
         return self.get_for_version(version_id)
@@ -53,9 +55,11 @@ class TestSuiteRepository:
             self.db.commit()
             self.db.refresh(record)
             return record
-        except IntegrityError:
+        except IntegrityError as exc:
             self.db.rollback()
-            raise ValueError("A generation request conflicted with another request; retry it")
+            raise ValueError(
+                "A generation request conflicted with another request; retry it"
+            ) from exc
 
     def claim(self, record_id: str) -> tuple[dict[str, Any], dict[str, Any]] | None:
         row = self.db.execute(
@@ -121,7 +125,9 @@ class TestSuiteRepository:
                     .where(Agent.deleted_at.is_(None))
                 ),
             )
-            .values(status="completed", result_json=result, error=None, updated_at=utc_now())
+            .values(
+                status="completed", result_json=result, error=None, updated_at=utc_now()
+            )
         )
         self.db.commit()
         return saved.rowcount == 1

@@ -1,11 +1,11 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import (
+    JSON,
     CheckConstraint,
     DateTime,
     ForeignKey,
-    JSON,
     Numeric,
     String,
     Text,
@@ -13,8 +13,6 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.types import TypeDecorator
-
-from app.domain.test_categories import TEST_CATEGORIES
 
 
 class UTCDateTime(TypeDecorator[datetime]):
@@ -32,9 +30,7 @@ class UTCDateTime(TypeDecorator[datetime]):
         if value is None:
             return None
         return (
-            value.replace(tzinfo=timezone.utc)
-            if value.tzinfo is None
-            else value.astimezone(timezone.utc)
+            value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
         )
 
     def process_result_value(
@@ -43,14 +39,12 @@ class UTCDateTime(TypeDecorator[datetime]):
         if value is None:
             return None
         return (
-            value.replace(tzinfo=timezone.utc)
-            if value.tzinfo is None
-            else value.astimezone(timezone.utc)
+            value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
         )
 
 
 def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class Base(DeclarativeBase):
