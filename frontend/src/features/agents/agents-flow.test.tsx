@@ -5,10 +5,18 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AgentPage } from "./agent-page";
 import { AgentsPage } from "./agents-page";
-import { agentsApi, classificationsApi, versionsApi } from "./api";
+import { agentsApi, classificationsApi, testSuitesApi, versionsApi } from "./api";
 import { ComparePage } from "./compare-page";
 import { ClassificationPanel } from "./components/classification-panel";
-import type { Agent, AgentVersion, Classification, ClassificationScores } from "./types";
+import { TestSuitePage } from "./test-suite-page";
+import type {
+  Agent,
+  AgentVersion,
+  Classification,
+  ClassificationScores,
+  TestSuite,
+  TestSuiteGeneration,
+} from "./types";
 
 vi.mock("./api", () => ({
   agentsApi: {
@@ -20,6 +28,7 @@ vi.mock("./api", () => ({
   },
   versionsApi: { list: vi.fn(), get: vi.fn(), create: vi.fn() },
   classificationsApi: { classify: vi.fn(), get: vi.fn() },
+  testSuitesApi: { get: vi.fn(), generate: vi.fn() },
 }));
 
 const scoreKeys: (keyof ClassificationScores)[] = [
@@ -85,6 +94,25 @@ const agent: Agent = {
   updated_at: "2026-10-15T10:00:00Z",
   latest_version: v2,
 };
+const generatedSuite: TestSuite = {
+  id: "ts-1",
+  version_id: "agv-2",
+  status: "completed",
+  requested_count: 1,
+  allocation: { happy_path: 1 },
+  has_completed_suite: true,
+  error: null,
+  created_at: "2026-10-15T10:00:00Z",
+  updated_at: "2026-10-15T10:00:00Z",
+  generated_at: "2026-10-15T10:00:00Z",
+  items: [
+    {
+      category: "happy_path",
+      question: "Can I get a refund?",
+      expected_behavior: "Explain the refund process.",
+    },
+  ],
+};
 let versionStore: Record<string, AgentVersion>;
 
 function LocationText() {
@@ -108,6 +136,10 @@ function renderRoute(initialEntry: string) {
           <Route path="/agents" element={<AgentsPage />} />
           <Route path="/agents/:agentId" element={<AgentPage />} />
           <Route path="/agents/:agentId/compare" element={<ComparePage />} />
+          <Route
+            path="/agents/:agentId/versions/:versionId/test-suite"
+            element={<TestSuitePage />}
+          />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -153,6 +185,11 @@ beforeEach(() => {
     };
     return generated;
   });
+  vi.mocked(testSuitesApi.get).mockResolvedValue(null);
+  vi.mocked(testSuitesApi.generate).mockResolvedValue({
+    ...generatedSuite,
+    items: undefined,
+  } as unknown as TestSuiteGeneration);
 });
 
 describe("versioned agent workspace", () => {
@@ -320,6 +357,18 @@ describe("versioned agent workspace", () => {
     expect(
       screen.queryByRole("button", { name: /generate classification for this version/i }),
     ).not.toBeInTheDocument();
+  });
+
+  it("classifies an unclassified version before generating its test suite", async () => {
+    const user = userEvent.setup();
+    vi.mocked(testSuitesApi.get).mockResolvedValueOnce(null).mockResolvedValue(generatedSuite);
+    renderRoute("/agents/agt-1/versions/agv-2/test-suite");
+
+    await user.click(await screen.findByRole("button", { name: "Generate test suite" }));
+
+    expect(await screen.findByText("Can I get a refund?")).toBeInTheDocument();
+    expect(classificationsApi.classify).toHaveBeenCalledWith("agv-2", false);
+    expect(testSuitesApi.generate).toHaveBeenCalledWith("agv-2", 20);
   });
 
   it("submits agent creation with the nested initial version contract", async () => {

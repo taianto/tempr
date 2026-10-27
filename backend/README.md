@@ -18,6 +18,8 @@ pip install -e '.[dev]'
 
 Copy `.env.example` to `.env` in `backend/` and set `OPENAI_API_KEY` to enable classification. The backend loads this file regardless of the directory used to start the server. `CLASSIFICATION_MODEL` defaults to `gpt-6-luna`, and `CLASSIFICATION_TIMEOUT_SECONDS` defaults to `30`.
 
+Test suite generation uses `TEST_GENERATION_MODEL` when set, otherwise it uses `CLASSIFICATION_MODEL`. `TEST_GENERATION_TIMEOUT_SECONDS` defaults to `120`.
+
 ## Migrations and startup
 
 Run these commands from `backend/`:
@@ -50,6 +52,10 @@ Create an agent with its required initial version and schema:
 The initial label defaults to `1.0`. Versions are immutable; add a schema revision with `POST /api/v1/versions` and a `{ "agent_id": "agt_…", "version": "2.0", "schema": { ... } }` body. Version labels are unique per agent. Agent detail includes the latest created version, and historical versions are available from `GET /api/v1/versions?agent_id=agt_…`. Individual versions are available from `GET /api/v1/versions/{version_id}`.
 
 Classify a version with `POST /api/v1/classifications` and a `{ "version_id": "agv_…" }` body. Classification is saved against that immutable version and reused on later requests. Add `?refresh=true` to classify again and replace its saved scores. Retrieve a classification by ID with `GET /api/v1/classifications/{classification_id}`. Scores are normalized to four decimal places and total `1.0000`. The classifier analyzes the version definition; it does not run the agent. Existing agent schemas are migrated to version `1.0`.
+
+Generate or replace a suite for a classified version with `POST /api/v1/versions/{version_id}/test-suites/generate`. Every request starts a new job and replaces that version's current suite. An optional JSON body `{"total_count": 20}` accepts a suite size from 1 to 100. The endpoint returns a suite ID and status; generation runs in a FastAPI background task. Each version has one test suite row, with generated questions and expected behavior stored together. The requested count is allocated according to the saved classification using Hamilton's largest-remainder method. An earlier job may keep running after replacement, but its result cannot overwrite the newer suite. The classifier must have classified the version first. Background tasks run in the API process, so a process interruption can leave a job queued or running.
+
+Retrieve a version's current suite and generation status with `GET /api/v1/versions/{version_id}/test-suites`. A valid version without a suite returns `null`. The frontend test-suite page classifies an unclassified version before requesting generation, then polls until the job completes or fails. Test categories are defined in `app/domain/test_categories.py`; adding or removing a category also requires a database migration and updates to the classification prompt and frontend display.
 
 ## Development checks
 

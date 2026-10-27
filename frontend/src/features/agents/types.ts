@@ -32,6 +32,27 @@ export type Classification = {
   created_at: string;
   updated_at: string;
 };
+export type TestSuiteItem = {
+  category: keyof ClassificationScores;
+  question: string;
+  expected_behavior: string;
+};
+export type TestSuiteStatus = "queued" | "running" | "completed" | "failed";
+export type TestSuiteGeneration = {
+  id: string;
+  version_id: string;
+  status: TestSuiteStatus;
+  requested_count: number;
+  allocation: Record<string, number>;
+  has_completed_suite: boolean;
+  error: string | null;
+  created_at: string;
+  updated_at: string;
+};
+export type TestSuite = TestSuiteGeneration & {
+  items: TestSuiteItem[];
+  generated_at: string | null;
+};
 export type AgentVersionSummary = {
   id: string;
   version: string;

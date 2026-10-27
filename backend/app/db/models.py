@@ -3,6 +3,7 @@ from typing import Any
 
 from sqlalchemy import (
     JSON,
+    CheckConstraint,
     DateTime,
     ForeignKey,
     Numeric,
@@ -102,6 +103,9 @@ class AgentVersion(Base):
     classification: Mapped["Classification | None"] = relationship(
         foreign_keys=[classification_id], lazy="joined"
     )
+    test_suite: Mapped["TestSuite | None"] = relationship(
+        back_populates="version", cascade="all, delete-orphan", uselist=False
+    )
 
 
 class Classification(Base):
@@ -123,3 +127,32 @@ class Classification(Base):
     updated_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), nullable=False, default=utc_now, onupdate=utc_now
     )
+
+
+class TestSuite(Base):
+    """Generation job and generated suite for one agent version."""
+
+    __tablename__ = "test_suites"
+    __table_args__ = (
+        UniqueConstraint("version_id", name="uq_test_suites_version_id"),
+        CheckConstraint(
+            "status IN ('queued', 'running', 'completed', 'failed')",
+            name="ck_test_suites_status",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    version_id: Mapped[str] = mapped_column(
+        ForeignKey("agent_versions.id", ondelete="CASCADE"), nullable=False
+    )
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    request_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    result_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), nullable=False, default=utc_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), nullable=False, default=utc_now, onupdate=utc_now
+    )
+    version: Mapped[AgentVersion] = relationship(back_populates="test_suite")

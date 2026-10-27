@@ -26,7 +26,7 @@ Copy `.env.example` to `.env.local` to override settings. `VITE_API_PROXY_TARGET
 
 ## Workspace
 
-The versioned workspace uses `/agents`, `/agents/:agentId`, and `/agents/:agentId/compare`. It supports agent creation, rename, removal, immutable version creation, configuration inspection, and version classification comparisons through the `/api/v1/agents`, `/api/v1/versions`, and `/api/v1/classifications` resources.
+The versioned workspace uses `/agents`, `/agents/:agentId`, `/agents/:agentId/compare`, and `/agents/:agentId/versions/:versionId/test-suite`. It supports agent creation, rename, removal, immutable version creation, configuration inspection, classification comparisons, and version-specific test suite generation and review through the `/api/v1/agents`, `/api/v1/versions`, and `/api/v1/classifications` resources.
 
 Deployments must serve `index.html` as the fallback for these frontend routes while continuing to proxy `/api/v1/*` to the backend; Vite's development server already provides this fallback.
 

@@ -1,11 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { agentsApi, classificationsApi, versionsApi } from "../api";
+import { agentsApi, classificationsApi, testSuitesApi, versionsApi } from "../api";
 import type {
   Agent,
   AgentCreateInput,
   AgentUpdateInput,
   AgentVersion,
   Classification,
+  TestSuite,
+  TestSuiteGeneration,
   VersionCreateInput,
 } from "../types";
 
@@ -14,6 +16,7 @@ export const agentKeys = {
   detail: (id: string) => ["agents", id] as const,
   versions: (id: string) => ["agents", id, "versions"] as const,
   version: (versionId: string) => ["versions", versionId] as const,
+  testSuite: (versionId: string) => ["versions", versionId, "test-suite"] as const,
   classifications: ["classifications"] as const,
 };
 
@@ -44,6 +47,35 @@ export function useVersion(versionId: string) {
     enabled: Boolean(versionId),
     retry: (count, error) =>
       !(error instanceof Error && "status" in error && error.status === 404) && count < 1,
+  });
+}
+
+export function useTestSuite(versionId: string) {
+  return useQuery({
+    queryKey: agentKeys.testSuite(versionId),
+    queryFn: ({ signal }) => testSuitesApi.get(versionId, signal),
+    enabled: Boolean(versionId),
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status === "queued" || status === "running" ? 2_000 : false;
+    },
+  });
+}
+
+export function useGenerateTestSuite(versionId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationKey: ["generate-test-suite", versionId],
+    mutationFn: (totalCount: number) => testSuitesApi.generate(versionId, totalCount),
+    onSuccess: async (generation: TestSuiteGeneration) => {
+      const currentSuite: TestSuite = {
+        ...generation,
+        items: [],
+        generated_at: null,
+      };
+      client.setQueryData<TestSuite | null>(agentKeys.testSuite(versionId), currentSuite);
+      await client.invalidateQueries({ queryKey: agentKeys.testSuite(versionId) });
+    },
   });
 }
 
@@ -132,6 +164,7 @@ export function useDeleteAgent() {
       ]);
       for (const versionId of versionIds) {
         client.removeQueries({ queryKey: agentKeys.version(versionId) });
+        client.removeQueries({ queryKey: agentKeys.testSuite(versionId) });
       }
       await client.invalidateQueries({ queryKey: agentKeys.all });
     },

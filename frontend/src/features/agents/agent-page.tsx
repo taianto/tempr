@@ -1,6 +1,7 @@
 import {
   ArrowLeftRight,
   CalendarDays,
+  ClipboardList,
   Code2,
   Cpu,
   MessageSquareText,
@@ -315,6 +316,15 @@ export function AgentPage() {
                         >
                           <Code2 size={14} />
                           View configuration
+                        </Button>
+                        <Button asChild size="sm">
+                          <Link
+                            aria-label={`Test suite for version ${version.version}`}
+                            to={`/agents/${encodeURIComponent(agentId)}/versions/${encodeURIComponent(version.id)}/test-suite`}
+                          >
+                            <ClipboardList size={14} />
+                            Test suite
+                          </Link>
                         </Button>
                         <Button asChild size="sm">
                           <Link

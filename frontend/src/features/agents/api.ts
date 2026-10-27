@@ -2,6 +2,8 @@ import type {
   AgentVersion,
   AgentVersionListResponse,
   Classification,
+  TestSuite,
+  TestSuiteGeneration,
   VersionCreateInput,
 } from "./types";
 import {
@@ -113,4 +115,16 @@ export const classificationsApi = {
     }),
   get: (classificationId: string, signal?: AbortSignal) =>
     request<Classification>(`/classifications/${encodeURIComponent(classificationId)}`, { signal }),
+};
+
+export const testSuitesApi = {
+  get: (versionId: string, signal?: AbortSignal) =>
+    request<TestSuite | null>(`/versions/${encodeURIComponent(versionId)}/test-suites`, {
+      signal,
+    }),
+  generate: (versionId: string, totalCount: number) =>
+    request<TestSuiteGeneration>(
+      `/versions/${encodeURIComponent(versionId)}/test-suites/generate`,
+      { method: "POST", body: { total_count: totalCount } },
+    ),
 };
