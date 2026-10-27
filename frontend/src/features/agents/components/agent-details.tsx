@@ -15,7 +15,7 @@ export function AgentDetails({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const query = useVersion(agentId, versionId ?? "");
+  const query = useVersion(versionId ?? "");
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent aria-describedby="version-details-description" className="max-w-xl">
@@ -33,7 +33,7 @@ export function AgentDetails({
               Try again
             </Button>
           </div>
-        ) : query.data ? (
+        ) : query.data && query.data.agent_id === agentId ? (
           <div className="pt-8">
             <div className="flex items-start gap-4">
               <span className="flex h-12 w-12 items-center justify-center rounded-[14px] bg-indigo-50 text-indigo-600">

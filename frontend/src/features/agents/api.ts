@@ -1,14 +1,16 @@
+import type {
+  AgentVersion,
+  AgentVersionListResponse,
+  Classification,
+  VersionCreateInput,
+} from "./types";
 import {
   type Agent,
   type AgentCreateInput,
   type AgentListResponse,
   type AgentUpdateInput,
-  type AgentVersion,
-  type AgentVersionListResponse,
   ApiError,
   type ApiValidationError,
-  type Classification,
-  type VersionCreateInput,
 } from "./types";
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
@@ -87,21 +89,28 @@ export const agentsApi = {
   update: (id: string, agent: AgentUpdateInput) =>
     request<Agent>(`/agents/${encodeURIComponent(id)}`, { method: "PATCH", body: agent }),
   delete: (id: string) => request<void>(`/agents/${encodeURIComponent(id)}`, { method: "DELETE" }),
-  listVersions: (id: string, signal?: AbortSignal) =>
-    request<AgentVersionListResponse>(`/agents/${encodeURIComponent(id)}/versions`, { signal }),
-  getVersion: (id: string, versionId: string, signal?: AbortSignal) =>
-    request<AgentVersion>(
-      `/agents/${encodeURIComponent(id)}/versions/${encodeURIComponent(versionId)}`,
-      { signal },
-    ),
-  createVersion: (id: string, version: VersionCreateInput) =>
-    request<AgentVersion>(`/agents/${encodeURIComponent(id)}/versions`, {
-      method: "POST",
-      body: version,
+};
+
+export const versionsApi = {
+  list: (agentId: string, signal?: AbortSignal) =>
+    request<AgentVersionListResponse>(`/versions?agent_id=${encodeURIComponent(agentId)}`, {
+      signal,
     }),
-  classify: (id: string, versionId: string, refresh = false) =>
-    request<Classification>(
-      `/agents/${encodeURIComponent(id)}/versions/${encodeURIComponent(versionId)}/classify${refresh ? "?refresh=true" : ""}`,
-      { method: "POST" },
-    ),
+  get: (versionId: string, signal?: AbortSignal) =>
+    request<AgentVersion>(`/versions/${encodeURIComponent(versionId)}`, { signal }),
+  create: (agentId: string, version: VersionCreateInput) =>
+    request<AgentVersion>(`/versions`, {
+      method: "POST",
+      body: { agent_id: agentId, ...version },
+    }),
+};
+
+export const classificationsApi = {
+  classify: (versionId: string, refresh = false) =>
+    request<Classification>(`/classifications${refresh ? "?refresh=true" : ""}`, {
+      method: "POST",
+      body: { version_id: versionId },
+    }),
+  get: (classificationId: string, signal?: AbortSignal) =>
+    request<Classification>(`/classifications/${encodeURIComponent(classificationId)}`, { signal }),
 };

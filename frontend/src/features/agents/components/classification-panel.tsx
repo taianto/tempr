@@ -7,18 +7,16 @@ import { useClassify } from "../hooks/use-agents";
 import type { AgentVersion } from "../types";
 
 export function ClassificationPanel({
-  agentId,
   version,
   compact = false,
 }: {
-  agentId: string;
   version: AgentVersion;
   compact?: boolean;
 }) {
   const [error, setError] = useState<string | null>(null);
-  const classify = useClassify(agentId, version.id);
-  const regenerate = useClassify(agentId, version.id, true);
-  const pending = useIsMutating({ mutationKey: ["classify", agentId, version.id] }) > 0;
+  const classify = useClassify(version.id);
+  const regenerate = useClassify(version.id, true);
+  const pending = useIsMutating({ mutationKey: ["classify", version.id] }) > 0;
   const classification = version.classification;
 
   async function run(refresh: boolean) {

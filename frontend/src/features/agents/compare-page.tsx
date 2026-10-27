@@ -3,7 +3,7 @@ import { LoaderCircle, Plus, X } from "lucide-react";
 import { useEffect } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { agentsApi } from "./api";
+import { versionsApi } from "./api";
 import { CATEGORIES } from "./classification-categories";
 import { WorkspaceLayout } from "./components/workspace-layout";
 import { agentKeys, useAgent, useClassify, useVersions } from "./hooks/use-agents";
@@ -76,9 +76,8 @@ export function ComparePage() {
 
   const columns = useQueries({
     queries: selectedIds.map((versionId) => ({
-      queryKey: agentKeys.version(agentId, versionId),
-      queryFn: ({ signal }: { signal: AbortSignal }) =>
-        agentsApi.getVersion(agentId, versionId, signal),
+      queryKey: agentKeys.version(versionId),
+      queryFn: ({ signal }: { signal: AbortSignal }) => versionsApi.get(versionId, signal),
       enabled: Boolean(agentId && versionId),
       retry: (count: number, error: Error & { status?: number }) =>
         error.status !== 404 && count < 1,
@@ -151,7 +150,8 @@ export function ComparePage() {
                 </th>
                 {selectedIds.map((id, index) => {
                   const column = columns[index];
-                  const value = column?.data;
+                  const value = column?.data?.agent_id === agentId ? column.data : undefined;
+                  const wrongAgent = Boolean(column?.data && !value);
                   return (
                     <th scope="col" key={id} className="min-w-56 px-4 py-4 align-top">
                       <div className="flex min-h-8 items-center justify-between gap-2">
@@ -159,7 +159,7 @@ export function ComparePage() {
                           <span className="block text-sm font-semibold text-slate-900">
                             {value
                               ? `Version ${value.version}`
-                              : column?.isError
+                              : column?.isError || wrongAgent
                                 ? "Unavailable version"
                                 : "Loading version…"}
                           </span>
@@ -191,7 +191,7 @@ export function ComparePage() {
                           )}
                         </div>
                       </div>
-                      {column?.isError && (
+                      {(column?.isError || wrongAgent) && (
                         <p className="mt-2 text-xs text-rose-700">
                           This version could not be loaded.
                         </p>
@@ -199,9 +199,7 @@ export function ComparePage() {
                       {column?.isLoading && (
                         <span className="mt-2 inline-flex text-xs text-slate-400">Loading…</span>
                       )}
-                      {value && !value.classification && (
-                        <UnclassifiedAction agentId={agentId} versionId={id} />
-                      )}
+                      {value && !value.classification && <UnclassifiedAction versionId={id} />}
                     </th>
                   );
                 })}
@@ -221,7 +219,11 @@ export function ComparePage() {
                   </th>
                   {selectedIds.map((id, index) => {
                     const column = columns[index];
-                    const score = column.data?.classification?.scores[category.key];
+                    const value = column.data;
+                    const belongsToAgent = value?.agent_id === agentId;
+                    const score = belongsToAgent
+                      ? value.classification?.scores[category.key]
+                      : undefined;
                     return (
                       <td
                         key={`${id}-${category.key}`}
@@ -229,7 +231,7 @@ export function ComparePage() {
                       >
                         {typeof score === "number" ? (
                           `${Math.round(score * 100)}%`
-                        ) : column.isError ? (
+                        ) : column.isError || (column.data && !belongsToAgent) ? (
                           <span className="text-xs text-rose-400">Unavailable</span>
                         ) : (
                           "—"
@@ -259,9 +261,9 @@ export function ComparePage() {
   );
 }
 
-function UnclassifiedAction({ agentId, versionId }: { agentId: string; versionId: string }) {
-  const classify = useClassify(agentId, versionId);
-  const pending = useIsMutating({ mutationKey: ["classify", agentId, versionId] }) > 0;
+function UnclassifiedAction({ versionId }: { versionId: string }) {
+  const classify = useClassify(versionId);
+  const pending = useIsMutating({ mutationKey: ["classify", versionId] }) > 0;
   return (
     <div className="mt-3">
       <Button size="sm" variant="outline" onClick={() => classify.mutate()} disabled={pending}>

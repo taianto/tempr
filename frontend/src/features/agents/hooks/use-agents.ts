@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { agentsApi } from "../api";
+import { agentsApi, classificationsApi, versionsApi } from "../api";
 import type {
   Agent,
   AgentCreateInput,
@@ -13,7 +13,8 @@ export const agentKeys = {
   all: ["agents"] as const,
   detail: (id: string) => ["agents", id] as const,
   versions: (id: string) => ["agents", id, "versions"] as const,
-  version: (id: string, versionId: string) => ["agents", id, "versions", versionId] as const,
+  version: (versionId: string) => ["versions", versionId] as const,
+  classifications: ["classifications"] as const,
 };
 
 export function useAgents() {
@@ -31,16 +32,16 @@ export function useAgent(id: string) {
 export function useVersions(id: string) {
   return useQuery({
     queryKey: agentKeys.versions(id),
-    queryFn: ({ signal }) => agentsApi.listVersions(id, signal),
+    queryFn: ({ signal }) => versionsApi.list(id, signal),
     enabled: Boolean(id),
   });
 }
 
-export function useVersion(id: string, versionId: string) {
+export function useVersion(versionId: string) {
   return useQuery({
-    queryKey: agentKeys.version(id, versionId),
-    queryFn: ({ signal }) => agentsApi.getVersion(id, versionId, signal),
-    enabled: Boolean(id && versionId),
+    queryKey: agentKeys.version(versionId),
+    queryFn: ({ signal }) => versionsApi.get(versionId, signal),
+    enabled: Boolean(versionId),
     retry: (count, error) =>
       !(error instanceof Error && "status" in error && error.status === 404) && count < 1,
   });
@@ -71,9 +72,9 @@ export function useUpdateAgent(id: string) {
 export function useCreateVersion(id: string) {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (version: VersionCreateInput) => agentsApi.createVersion(id, version),
+    mutationFn: (version: VersionCreateInput) => versionsApi.create(id, version),
     onSuccess: async (version) => {
-      client.setQueryData(agentKeys.version(id, version.id), version);
+      client.setQueryData(agentKeys.version(version.id), version);
       await Promise.all([
         client.invalidateQueries({ queryKey: agentKeys.detail(id) }),
         client.invalidateQueries({ queryKey: agentKeys.versions(id) }),
@@ -83,31 +84,33 @@ export function useCreateVersion(id: string) {
   });
 }
 
-export function useClassify(id: string, versionId: string, refresh = false) {
+export function useClassify(versionId: string, refresh = false) {
   const client = useQueryClient();
   return useMutation({
-    mutationKey: ["classify", id, versionId],
-    mutationFn: () => agentsApi.classify(id, versionId, refresh),
+    mutationKey: ["classify", versionId],
+    mutationFn: () => classificationsApi.classify(versionId, refresh),
     onSuccess: async (classification: Classification) => {
-      client.setQueryData<AgentVersion>(agentKeys.version(id, versionId), (previous) =>
+      const version = client.getQueryData<AgentVersion>(agentKeys.version(versionId));
+      client.setQueryData<AgentVersion>(agentKeys.version(versionId), (previous) =>
         previous ? { ...previous, classification, classification_id: classification.id } : previous,
       );
-      client.setQueryData<Agent>(agentKeys.detail(id), (previous) =>
-        previous?.latest_version.id === versionId
-          ? {
-              ...previous,
-              latest_version: {
-                ...previous.latest_version,
-                classification,
-                classification_id: classification.id,
-              },
-            }
-          : previous,
-      );
+      if (version) {
+        client.setQueryData<Agent>(agentKeys.detail(version.agent_id), (previous) =>
+          previous?.latest_version.id === versionId
+            ? {
+                ...previous,
+                latest_version: {
+                  ...previous.latest_version,
+                  classification,
+                  classification_id: classification.id,
+                },
+              }
+            : previous,
+        );
+      }
       await Promise.all([
-        client.invalidateQueries({ queryKey: agentKeys.version(id, versionId) }),
-        client.invalidateQueries({ queryKey: agentKeys.detail(id) }),
-        client.invalidateQueries({ queryKey: agentKeys.versions(id) }),
+        client.invalidateQueries({ queryKey: agentKeys.version(versionId) }),
+        client.invalidateQueries({ queryKey: agentKeys.classifications }),
         client.invalidateQueries({ queryKey: agentKeys.all }),
       ]);
     },
@@ -119,8 +122,17 @@ export function useDeleteAgent() {
   return useMutation({
     mutationFn: (id: string) => agentsApi.delete(id),
     onSuccess: async (_, id) => {
+      const detail = client.getQueryData<Agent>(agentKeys.detail(id));
+      const cachedVersions = client.getQueryData<{ items: AgentVersion[] }>(agentKeys.versions(id));
       client.removeQueries({ queryKey: agentKeys.detail(id) });
       client.removeQueries({ queryKey: agentKeys.versions(id) });
+      const versionIds = new Set([
+        ...(cachedVersions?.items ?? []).map((version) => version.id),
+        ...(detail ? [detail.latest_version.id] : []),
+      ]);
+      for (const versionId of versionIds) {
+        client.removeQueries({ queryKey: agentKeys.version(versionId) });
+      }
       await client.invalidateQueries({ queryKey: agentKeys.all });
     },
   });

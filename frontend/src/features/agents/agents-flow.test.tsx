@@ -5,7 +5,7 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AgentPage } from "./agent-page";
 import { AgentsPage } from "./agents-page";
-import { agentsApi } from "./api";
+import { agentsApi, classificationsApi, versionsApi } from "./api";
 import { ComparePage } from "./compare-page";
 import { ClassificationPanel } from "./components/classification-panel";
 import type { Agent, AgentVersion, Classification, ClassificationScores } from "./types";
@@ -17,11 +17,9 @@ vi.mock("./api", () => ({
     create: vi.fn(),
     update: vi.fn(),
     delete: vi.fn(),
-    listVersions: vi.fn(),
-    getVersion: vi.fn(),
-    createVersion: vi.fn(),
-    classify: vi.fn(),
   },
+  versionsApi: { list: vi.fn(), get: vi.fn(), create: vi.fn() },
+  classificationsApi: { classify: vi.fn(), get: vi.fn() },
 }));
 
 const scoreKeys: (keyof ClassificationScores)[] = [
@@ -141,13 +139,13 @@ beforeEach(() => {
     ...agent,
     latest_version: { ...versionStore["agv-2"] },
   }));
-  vi.mocked(agentsApi.listVersions).mockResolvedValue({ items: [v2, v1], total: 2 });
-  vi.mocked(agentsApi.getVersion).mockImplementation(async (_id, versionId) => {
+  vi.mocked(versionsApi.list).mockResolvedValue({ items: [v2, v1], total: 2 });
+  vi.mocked(versionsApi.get).mockImplementation(async (versionId) => {
     const value = versionStore[versionId];
     if (!value) throw Object.assign(new Error("Version not found"), { status: 404 });
     return { ...value };
   });
-  vi.mocked(agentsApi.classify).mockImplementation(async (_id, versionId) => {
+  vi.mocked(classificationsApi.classify).mockImplementation(async (versionId) => {
     versionStore[versionId] = {
       ...versionStore[versionId],
       classification: generated,
@@ -173,10 +171,10 @@ describe("versioned agent workspace", () => {
     const user = userEvent.setup();
     renderRoute("/agents/agt-1");
     await user.click(await screen.findByRole("button", { name: "Generate classification" }));
-    await waitFor(() => expect(agentsApi.classify).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(classificationsApi.classify).toHaveBeenCalledTimes(1));
     expect(await screen.findAllByText("13%")).toHaveLength(8);
 
-    vi.mocked(agentsApi.classify).mockRejectedValueOnce(new Error("Provider unavailable"));
+    vi.mocked(classificationsApi.classify).mockRejectedValueOnce(new Error("Provider unavailable"));
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
     await user.click(await screen.findByRole("button", { name: "Regenerate" }));
     await waitFor(() =>
@@ -201,7 +199,7 @@ describe("versioned agent workspace", () => {
     const client = new QueryClient();
     const { container } = render(
       <QueryClientProvider client={client}>
-        <ClassificationPanel agentId="agt-1" version={v1} />
+        <ClassificationPanel version={v1} />
       </QueryClientProvider>,
     );
     expect(
@@ -215,7 +213,7 @@ describe("versioned agent workspace", () => {
 
   it("creates a new immutable version from the version-specific JSON contract", async () => {
     const user = userEvent.setup();
-    vi.mocked(agentsApi.createVersion).mockResolvedValue({
+    vi.mocked(versionsApi.create).mockResolvedValue({
       ...v2,
       id: "agv-3",
       version: "release-candidate",
@@ -236,7 +234,7 @@ describe("versioned agent workspace", () => {
     });
     await user.click(screen.getByRole("button", { name: "Create version" }));
     await waitFor(() =>
-      expect(agentsApi.createVersion).toHaveBeenCalledWith("agt-1", {
+      expect(versionsApi.create).toHaveBeenCalledWith("agt-1", {
         version: "release-candidate",
         schema: { prompt: { system: "Ship it" } },
       }),
@@ -300,7 +298,7 @@ describe("versioned agent workspace", () => {
       name: /generate classification for this version/i,
     });
     await user.click(classifyButton);
-    await waitFor(() => expect(agentsApi.classify).toHaveBeenCalledWith("agt-1", "agv-2", false));
+    await waitFor(() => expect(classificationsApi.classify).toHaveBeenCalledWith("agv-2", false));
     expect(await screen.findAllByText("13%")).toHaveLength(8);
   });
 
@@ -310,6 +308,18 @@ describe("versioned agent workspace", () => {
     expect(
       await screen.findByRole("columnheader", { name: /version 2\.0-beta/i }),
     ).toBeInTheDocument();
+  });
+
+  it("marks a version from another agent unavailable and hides classification actions", async () => {
+    vi.mocked(versionsApi.get).mockResolvedValue({ ...v1, agent_id: "agt-other" });
+    renderRoute("/agents/agt-1/compare?versions=agv-1");
+
+    expect(
+      await screen.findByRole("columnheader", { name: /unavailable version/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /generate classification for this version/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("submits agent creation with the nested initial version contract", async () => {

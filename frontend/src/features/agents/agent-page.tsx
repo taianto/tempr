@@ -43,6 +43,7 @@ export function AgentPage() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const latestSchema = agent.data?.latest_version.schema;
   const versionExample = {
+    agent_id: agentId,
     version: "",
     schema: latestSchema ?? { prompt: { system: "" }, model: null, tools: [], metadata: {} },
   };
@@ -230,7 +231,7 @@ export function AgentPage() {
                   View configuration
                 </Button>
               </section>
-              <ClassificationPanel agentId={agentId} version={agent.data.latest_version} />
+              <ClassificationPanel version={agent.data.latest_version} />
             </div>
             <section className="mt-10">
               <div className="flex flex-wrap items-end justify-between gap-3">
@@ -349,9 +350,13 @@ export function AgentPage() {
               description="Add a new immutable schema revision. Enter a unique version label."
               submitLabel="Create version"
               fieldLabel="Version JSON"
-              endpoint={`POST /api/v1/agents/${agentId}/versions`}
+              endpoint="POST /api/v1/versions"
               example={versionExample}
-              initialValue={{ version: "", schema: latestSchema ?? ({} as AgentSchema) }}
+              initialValue={{
+                agent_id: agentId,
+                version: "",
+                schema: latestSchema ?? ({} as AgentSchema),
+              }}
               onSubmit={handleVersion}
             />
           </>

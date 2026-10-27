@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any
 from uuid import uuid4
 
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from app.db.models import Agent, AgentVersion
@@ -19,29 +17,12 @@ class AgentRepository:
     def __init__(self, db: Session) -> None:
         self.db = db
 
-    @staticmethod
-    def _version_values(schema: dict[str, Any]) -> dict[str, Any]:
-        return {
-            "description": schema.get("description"),
-            "system_prompt": schema["prompt"]["system"],
-            "developer_prompt": schema["prompt"].get("developer"),
-            "model_config_json": schema.get("model"),
-            "tools": schema.get("tools", []),
-            "metadata_json": schema.get("metadata", {}),
-        }
+    def build(self, name: str) -> Agent:
+        return Agent(id=_id("agt"), name=name)
 
-    def create(self, data: dict[str, Any]) -> Agent:
-        initial = data["initial_version"]
-        agent = Agent(id=_id("agt"), name=data["name"])
-        version = AgentVersion(
-            id=_id("agv"),
-            version=initial["version"],
-            **self._version_values(initial["schema"]),
-        )
-        agent.versions.append(version)
+    def add(self, agent: Agent) -> None:
         self.db.add(agent)
-        self.db.commit()
-        return self.get(agent.id)  # type: ignore[return-value]
+        self.db.flush()
 
     def get(self, agent_id: str) -> Agent | None:
         stmt = (
@@ -69,38 +50,6 @@ class AgentRepository:
                 key=lambda item: (item.created_at, item.id), reverse=True
             )
         return items, len(items)
-
-    def versions(self, agent_id: str) -> list[AgentVersion]:
-        return list(
-            self.db.scalars(
-                select(AgentVersion)
-                .where(AgentVersion.agent_id == agent_id)
-                .options(joinedload(AgentVersion.classification))
-                .order_by(AgentVersion.created_at.desc(), AgentVersion.id.desc())
-            ).all()
-        )
-
-    def get_version(self, agent_id: str, version_id: str) -> AgentVersion | None:
-        return self.db.scalar(
-            select(AgentVersion)
-            .where(AgentVersion.agent_id == agent_id, AgentVersion.id == version_id)
-            .options(joinedload(AgentVersion.classification))
-        )
-
-    def create_version(self, agent: Agent, data: dict[str, Any]) -> AgentVersion:
-        version = AgentVersion(
-            id=_id("agv"),
-            agent_id=agent.id,
-            version=data["version"],
-            **self._version_values(data["schema"]),
-        )
-        self.db.add(version)
-        try:
-            self.db.commit()
-        except IntegrityError:
-            self.db.rollback()
-            raise
-        return self.get_version(agent.id, version.id)  # type: ignore[return-value]
 
     def update_name(self, agent: Agent, name: str) -> Agent:
         agent.name = name
