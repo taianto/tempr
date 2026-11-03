@@ -57,6 +57,8 @@ Generate or replace a suite for a classified version with `POST /api/v1/versions
 
 Retrieve a version's current suite and generation status with `GET /api/v1/versions/{version_id}/test-suites`. A valid version without a suite returns `null`. The frontend test-suite page classifies an unclassified version before requesting generation, then polls until the job completes or fails. Test categories are defined in `app/domain/test_categories.py`; adding or removing a category also requires a database migration and updates to the classification prompt and frontend display.
 
+Store one execution trace for a completed suite with `POST /api/v1/test-suites/{test_suite_id}/trace` and a JSON body such as `{"trace": {"steps": [{"input": "Can I get a refund?", "output": "..."}]}}`. The trace is saved as opaque JSON and returned with its ID, suite ID, and creation time. Retrieve it with `GET` on the same path or permanently delete it with `DELETE`. A suite can have only one trace; delete it before creating a replacement. Replacing or deleting the suite also deletes its trace. Trace evaluation is not performed yet.
+
 ## Development checks
 
 ```bash

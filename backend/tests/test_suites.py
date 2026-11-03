@@ -18,6 +18,7 @@ from app.db.models import (
 from app.db.models import (
     TestSuite as SuiteRecord,
 )
+from app.db.models import TestSuiteTrace as TraceRecord
 from app.domain.test_categories import TEST_CATEGORIES
 from app.main import app
 from app.prompts.test_suites import TEST_SUITE_SYSTEM_PROMPT
@@ -81,6 +82,21 @@ SUITE_ITEM = {
     "question": "Can I get a refund?",
     "expected_behavior": "Explain the refund process.",
 }
+TRACE_PATH = "/api/v1/test-suites/ts_completed/trace"
+
+
+def _save_completed_suite(sessions, suite_id="ts_completed"):
+    with sessions() as db:
+        db.add(
+            SuiteRecord(
+                id=suite_id,
+                version_id="agv_suite",
+                status="completed",
+                request_json={"total_count": 1, "allocation": {"happy_path": 1}},
+                result_json={"items": [SUITE_ITEM]},
+            )
+        )
+        db.commit()
 
 
 @pytest.mark.parametrize("structured", [False, True])
@@ -193,3 +209,91 @@ def test_get_suite_rejects_deleted_agent(suite_environment):
     response = client.get("/api/v1/versions/agv_suite/test-suites")
 
     assert response.status_code == 404
+
+
+def test_create_get_delete_and_recreate_trace(suite_environment):
+    client, sessions, _ = suite_environment
+    _save_completed_suite(sessions)
+    trace = {"steps": [{"input": "Can I get a refund?", "output": "Yes."}]}
+
+    created = client.post(TRACE_PATH, json={"trace": trace})
+
+    assert created.status_code == 201
+    body = created.json()
+    assert body["id"].startswith("trc_")
+    assert body["test_suite_id"] == "ts_completed"
+    assert body["trace"] == trace
+    assert body["created_at"]
+    assert created.headers["location"] == TRACE_PATH
+    assert client.get(TRACE_PATH).json() == body
+    with sessions() as db:
+        record = db.get(TraceRecord, body["id"])
+        assert record.trace_json == trace
+
+    deleted = client.delete(TRACE_PATH)
+    assert deleted.status_code == 204
+    assert client.get(TRACE_PATH).status_code == 404
+
+    recreated = client.post(TRACE_PATH, json={"trace": ["raw", 3, True, None]})
+    assert recreated.status_code == 201
+    assert recreated.json()["trace"] == ["raw", 3, True, None]
+
+
+def test_create_trace_rejects_duplicate_and_invalid_body(suite_environment):
+    client, sessions, _ = suite_environment
+    _save_completed_suite(sessions)
+
+    assert client.post(TRACE_PATH, json={"trace": {"ok": True}}).status_code == 201
+    duplicate = client.post(TRACE_PATH, json={"trace": {"ok": False}})
+    missing_payload = client.post(TRACE_PATH, json={})
+    extra_payload = client.post(TRACE_PATH, json={"trace": {}, "other": "no"})
+
+    assert duplicate.status_code == 409
+    assert missing_payload.status_code == 422
+    assert extra_payload.status_code == 422
+
+
+def test_create_trace_requires_completed_available_suite(suite_environment):
+    client, sessions, _ = suite_environment
+    queued_path = "/api/v1/test-suites/ts_queued/trace"
+    with sessions() as db:
+        db.add(
+            SuiteRecord(
+                id="ts_queued",
+                version_id="agv_suite",
+                status="queued",
+                request_json={"total_count": 1, "allocation": {"happy_path": 1}},
+            )
+        )
+        db.commit()
+
+    assert client.post(queued_path, json={"trace": {}}).status_code == 409
+    assert client.post(TRACE_PATH, json={"trace": {}}).status_code == 404
+    assert client.get(TRACE_PATH).status_code == 404
+    assert client.delete(TRACE_PATH).status_code == 404
+
+    with sessions() as db:
+        db.delete(db.get(SuiteRecord, "ts_queued"))
+        db.commit()
+    _save_completed_suite(sessions)
+    with sessions() as db:
+        db.get(Agent, "agt_suite").deleted_at = utc_now()
+        db.commit()
+    assert client.post(TRACE_PATH, json={"trace": {}}).status_code == 404
+
+
+def test_regenerating_suite_cascades_trace_deletion(suite_environment):
+    client, sessions, provider = suite_environment
+    _save_completed_suite(sessions)
+    provider.return_value.with_structured_output.return_value.invoke.return_value = {
+        "items": [SUITE_ITEM]
+    }
+    created = client.post(TRACE_PATH, json={"trace": {"steps": []}})
+    assert created.status_code == 201
+
+    generated = client.post(GENERATION_PATH, json={"total_count": 1})
+
+    assert generated.status_code == 202
+    assert client.get(TRACE_PATH).status_code == 404
+    with sessions() as db:
+        assert db.get(TraceRecord, created.json()["id"]) is None

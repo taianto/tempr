@@ -156,3 +156,23 @@ class TestSuite(Base):
         UTCDateTime(), nullable=False, default=utc_now, onupdate=utc_now
     )
     version: Mapped[AgentVersion] = relationship(back_populates="test_suite")
+    trace: Mapped["TestSuiteTrace | None"] = relationship(
+        back_populates="test_suite", cascade="all, delete-orphan", uselist=False
+    )
+
+
+class TestSuiteTrace(Base):
+    __tablename__ = "traces"
+    __table_args__ = (
+        UniqueConstraint("test_suite_id", name="uq_traces_test_suite_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    test_suite_id: Mapped[str] = mapped_column(
+        ForeignKey("test_suites.id", ondelete="CASCADE"), nullable=False
+    )
+    trace_json: Mapped[Any] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), nullable=False, default=utc_now
+    )
+    test_suite: Mapped[TestSuite] = relationship(back_populates="trace")

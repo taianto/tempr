@@ -26,6 +26,31 @@ def test_migrations_match_current_models(tmp_path, monkeypatch):
         get_settings.cache_clear()
 
 
+def test_trace_migration_adds_unique_cascading_suite_foreign_key(tmp_path, monkeypatch):
+    url = f"sqlite:///{tmp_path / 'trace-schema.db'}"
+    monkeypatch.setenv("DATABASE_URL", url)
+    get_settings.cache_clear()
+    try:
+        command.upgrade(_config(url), "head")
+        engine = sa.create_engine(url)
+        with engine.connect() as connection:
+            foreign_key = (
+                connection.exec_driver_sql("PRAGMA foreign_key_list(traces)")
+                .mappings()
+                .one()
+            )
+            indexes = (
+                connection.exec_driver_sql("PRAGMA index_list(traces)").mappings().all()
+            )
+            assert foreign_key["table"] == "test_suites"
+            assert foreign_key["from"] == "test_suite_id"
+            assert foreign_key["on_delete"] == "CASCADE"
+            assert any(index["unique"] for index in indexes)
+        engine.dispose()
+    finally:
+        get_settings.cache_clear()
+
+
 def test_migration_backfills_existing_and_deleted_agents(tmp_path, monkeypatch):
     database = tmp_path / "legacy.db"
     url = f"sqlite:///{database}"
