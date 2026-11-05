@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     classification_timeout_seconds: float = Field(default=30.0, gt=0)
     test_generation_model: str | None = None
     test_generation_timeout_seconds: float = Field(default=120.0, gt=0)
+    evaluation_model: str | None = None
+    evaluation_timeout_seconds: float = Field(default=120.0, gt=0)
 
 
 @lru_cache

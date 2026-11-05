@@ -28,6 +28,10 @@ class GeneratedTestSuiteItem(BaseModel):
         return value
 
 
+class TestSuiteItem(GeneratedTestSuiteItem):
+    id: str
+
+
 class GeneratedTestSuite(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -47,5 +51,5 @@ class TestSuiteGenerationResponse(BaseModel):
 
 
 class TestSuiteResponse(TestSuiteGenerationResponse):
-    items: list[GeneratedTestSuiteItem] = Field(default_factory=list)
+    items: list[TestSuiteItem] = Field(default_factory=list)
     generated_at: datetime | None = None

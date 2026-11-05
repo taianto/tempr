@@ -33,6 +33,7 @@ export type Classification = {
   updated_at: string;
 };
 export type TestSuiteItem = {
+  id: string;
   category: keyof ClassificationScores;
   question: string;
   expected_behavior: string;

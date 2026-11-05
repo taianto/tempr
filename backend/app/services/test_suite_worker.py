@@ -1,5 +1,6 @@
 import logging
 from datetime import UTC, datetime
+from uuid import uuid4
 
 from app.config import get_settings
 from app.db.database import SessionLocal
@@ -28,7 +29,7 @@ def run_test_suite_generation(test_suite_id: str) -> None:
         items = TestSuiteGenerator(get_settings()).generate(context, request)
         result = completed_result(
             request,
-            [item.model_dump() for item in items],
+            [{"id": f"tc_{uuid4().hex}", **item.model_dump()} for item in items],
             datetime.now(UTC),
         )
         with SessionLocal() as db:

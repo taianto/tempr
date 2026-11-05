@@ -20,6 +20,8 @@ Copy `.env.example` to `.env` in `backend/` and set `OPENAI_API_KEY` to enable c
 
 Test suite generation uses `TEST_GENERATION_MODEL` when set, otherwise it uses `CLASSIFICATION_MODEL`. `TEST_GENERATION_TIMEOUT_SECONDS` defaults to `120`.
 
+Evaluation uses `EVALUATION_MODEL` when set, otherwise it uses `CLASSIFICATION_MODEL`. `EVALUATION_TIMEOUT_SECONDS` defaults to `120`.
+
 ## Migrations and startup
 
 Run these commands from `backend/`:
@@ -57,7 +59,28 @@ Generate or replace a suite for a classified version with `POST /api/v1/versions
 
 Retrieve a version's current suite and generation status with `GET /api/v1/versions/{version_id}/test-suites`. A valid version without a suite returns `null`. The frontend test-suite page classifies an unclassified version before requesting generation, then polls until the job completes or fails. Test categories are defined in `app/domain/test_categories.py`; adding or removing a category also requires a database migration and updates to the classification prompt and frontend display.
 
-Store one execution trace for a completed suite with `POST /api/v1/test-suites/{test_suite_id}/trace` and a JSON body such as `{"trace": {"steps": [{"input": "Can I get a refund?", "output": "..."}]}}`. The trace is saved as opaque JSON and returned with its ID, suite ID, and creation time. Retrieve it with `GET` on the same path or permanently delete it with `DELETE`. A suite can have only one trace; delete it before creating a replacement. Replacing or deleting the suite also deletes its trace. Trace evaluation is not performed yet.
+Store one execution trace for a completed suite with `POST /api/v1/test-suites/{test_suite_id}/trace`. Upload one execution for every generated test case, keyed by its `id` (stable across retrievals of that suite):
+
+```json
+{
+  "trace": {
+    "executions": [
+      {
+        "test_case_id": "tc_…",
+        "execution": {
+          "messages": [{"role": "assistant", "content": "Refunds take five days."}],
+          "tool_calls": [],
+          "retrieved_information": []
+        }
+      }
+    ]
+  }
+}
+```
+
+The `execution` value is an opaque, nonempty JSON object. Include the ordered messages, actions, tool results, and retrieved information the agent could use so the judge can assess consistency and grounding. Evaluation requires exactly one execution for every suite case; duplicate, missing, or unknown case IDs are rejected.
+
+Start an evaluation with `POST /api/v1/test-suites/{test_suite_id}/evaluation`. It returns `202 Accepted` while queued or running; `GET` on the same URL returns its status and, when complete, each case's adherence, consistency, and grounding score with an explanation. Repeated POSTs reuse the current result. Use `?refresh=true` to replace it and run the judge again. Each score is between zero and one. Evaluation runs as an in-process background task, so after an API restart use `?refresh=true` to recover a job left queued or running. Replacing the suite or deleting its trace also deletes its evaluation.
 
 ## Development checks
 

@@ -142,7 +142,7 @@ export function TestSuitePage() {
                 <section aria-label="Generated test suite" className="mt-7 space-y-3">
                   {suite.data.items.map((item, index) => (
                     <article
-                      key={`${item.category}-${item.question}`}
+                      key={item.id}
                       className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-soft sm:p-6"
                     >
                       <div className="flex items-center gap-3">

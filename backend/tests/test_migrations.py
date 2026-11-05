@@ -51,6 +51,63 @@ def test_trace_migration_adds_unique_cascading_suite_foreign_key(tmp_path, monke
         get_settings.cache_clear()
 
 
+def test_evaluation_migration_backfills_existing_suite_case_ids(tmp_path, monkeypatch):
+    url = f"sqlite:///{tmp_path / 'evaluation-schema.db'}"
+    monkeypatch.setenv("DATABASE_URL", url)
+    get_settings.cache_clear()
+    try:
+        config = _config(url)
+        command.upgrade(config, "0004_test_suite_traces")
+        engine = sa.create_engine(url)
+        with engine.begin() as connection:
+            connection.execute(
+                sa.text(
+                    "INSERT INTO agents (id, name, created_at, updated_at) "
+                    "VALUES ('agt_eval', 'Eval', '2026-01-01', '2026-01-01')"
+                )
+            )
+            connection.execute(
+                sa.text("""
+                    INSERT INTO agent_versions
+                    (id, agent_id, version, system_prompt, tools, metadata, created_at)
+                    VALUES ('agv_eval', 'agt_eval', '1.0', 'prompt', '[]', '{}', '2026-01-01')
+                """)
+            )
+            connection.execute(
+                sa.text("""
+                    INSERT INTO test_suites
+                    (id, version_id, status, request_json, result_json, created_at, updated_at)
+                    VALUES ('ts_eval', 'agv_eval', 'completed', '{}', :result, '2026-01-01', '2026-01-01')
+                """),
+                {
+                    "result": json.dumps(
+                        {
+                            "items": [
+                                {
+                                    "category": "happy_path",
+                                    "question": "Q",
+                                    "expected_behavior": "A",
+                                }
+                            ]
+                        }
+                    )
+                },
+            )
+
+        command.upgrade(config, "head")
+        with engine.connect() as connection:
+            result = connection.execute(
+                sa.text("SELECT result_json FROM test_suites WHERE id='ts_eval'")
+            ).scalar_one()
+            if isinstance(result, str):
+                result = json.loads(result)
+            assert result["items"][0]["id"].startswith("tc_")
+            assert result["items"][0]["question"] == "Q"
+        engine.dispose()
+    finally:
+        get_settings.cache_clear()
+
+
 def test_migration_backfills_existing_and_deleted_agents(tmp_path, monkeypatch):
     database = tmp_path / "legacy.db"
     url = f"sqlite:///{database}"
