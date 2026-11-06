@@ -12,6 +12,7 @@ from app.schemas.agent import (
     AgentUpdate,
 )
 from app.services.agents import AgentService
+from app.services.versions import VersionService
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 
@@ -28,15 +29,25 @@ def create_agent(
 @router.get("", response_model=AgentListResponse)
 def list_agents(db: Annotated[Session, Depends(get_db)]) -> AgentListResponse:
     agents, total = AgentService(db).list_agents()
+    summaries = VersionService(db).evaluation_summaries(
+        [agent.versions[0].id for agent in agents if agent.versions]
+    )
     return AgentListResponse(
-        items=[AgentListItem.from_record(agent) for agent in agents],
+        items=[
+            AgentListItem.from_record(
+                agent, summaries.get(agent.versions[0].id) if agent.versions else None
+            )
+            for agent in agents
+        ],
         total=total,
     )
 
 
 @router.get("/{agent_id}", response_model=AgentResponse)
 def get_agent(agent_id: str, db: Annotated[Session, Depends(get_db)]) -> AgentResponse:
-    return AgentResponse.from_record(AgentService(db).get_agent(agent_id))
+    agent = AgentService(db).get_agent(agent_id)
+    summaries = VersionService(db).evaluation_summaries([agent.versions[0].id])
+    return AgentResponse.from_record(agent, summaries.get(agent.versions[0].id))
 
 
 @router.patch("/{agent_id}", response_model=AgentResponse)
@@ -44,7 +55,9 @@ def update_agent(
     agent_id: str, payload: AgentUpdate, db: Annotated[Session, Depends(get_db)]
 ) -> AgentResponse:
     fields = payload.model_dump(exclude_unset=True)
-    return AgentResponse.from_record(AgentService(db).update_agent(agent_id, fields))
+    agent = AgentService(db).update_agent(agent_id, fields)
+    summaries = VersionService(db).evaluation_summaries([agent.versions[0].id])
+    return AgentResponse.from_record(agent, summaries.get(agent.versions[0].id))
 
 
 @router.delete("/{agent_id}", status_code=status.HTTP_204_NO_CONTENT)

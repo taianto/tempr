@@ -6,6 +6,7 @@ from app.db.models import Agent
 from app.schemas.version import (
     AgentVersionResponse,
     AgentVersionSummary,
+    EvaluationSummary,
     InitialVersion,
 )
 
@@ -29,7 +30,9 @@ class AgentResponse(BaseModel):
     latest_version: AgentVersionResponse
 
     @classmethod
-    def from_record(cls, agent: Agent) -> "AgentResponse":
+    def from_record(
+        cls, agent: Agent, evaluation_summary: EvaluationSummary | None = None
+    ) -> "AgentResponse":
         if not agent.versions:
             raise ValueError("Agent has no version")
         return cls(
@@ -37,7 +40,9 @@ class AgentResponse(BaseModel):
             name=agent.name,
             created_at=agent.created_at,
             updated_at=agent.updated_at,
-            latest_version=AgentVersionResponse.from_record(agent.versions[0]),
+            latest_version=AgentVersionResponse.from_record(
+                agent.versions[0], evaluation_summary
+            ),
         )
 
 
@@ -49,7 +54,9 @@ class AgentListItem(BaseModel):
     latest_version: AgentVersionSummary
 
     @classmethod
-    def from_record(cls, agent: Agent) -> "AgentListItem":
+    def from_record(
+        cls, agent: Agent, evaluation_summary: EvaluationSummary | None = None
+    ) -> "AgentListItem":
         if not agent.versions:
             raise ValueError("Agent has no version")
         return cls(
@@ -57,7 +64,9 @@ class AgentListItem(BaseModel):
             name=agent.name,
             created_at=agent.created_at,
             updated_at=agent.updated_at,
-            latest_version=AgentVersionSummary.from_record(agent.versions[0]),
+            latest_version=AgentVersionSummary.from_record(
+                agent.versions[0], evaluation_summary
+            ),
         )
 
 

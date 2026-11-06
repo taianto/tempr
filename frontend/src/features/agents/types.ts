@@ -33,6 +33,7 @@ export type Classification = {
   updated_at: string;
 };
 export type TestSuiteItem = {
+  id: string;
   category: keyof ClassificationScores;
   question: string;
   expected_behavior: string;
@@ -53,11 +54,46 @@ export type TestSuite = TestSuiteGeneration & {
   items: TestSuiteItem[];
   generated_at: string | null;
 };
+export type EvaluationResult = {
+  id: string;
+  test_case_id: string;
+  category: string;
+  adherence_score: number;
+  consistency_score: number;
+  grounding_score: number;
+  adherence_explanation: string;
+  consistency_explanation: string;
+  grounding_explanation: string;
+};
+export type TestSuiteEvaluation = {
+  id: string;
+  test_suite_id: string;
+  trace_id: string;
+  status: TestSuiteStatus;
+  judge_model: string;
+  rubric_version: string;
+  classification_snapshot: Record<string, unknown>;
+  error: string | null;
+  created_at: string;
+  updated_at: string;
+  results: EvaluationResult[];
+};
+export type TestSuiteTrace = {
+  id: string;
+  test_suite_id: string;
+  trace: unknown;
+  created_at: string;
+};
+export type EvaluationSummary = {
+  status: TestSuiteStatus;
+  overall_score: number | null;
+};
 export type AgentVersionSummary = {
   id: string;
   version: string;
   created_at: string;
   classification_id: string | null;
+  evaluation_summary?: EvaluationSummary | null;
 };
 export type AgentVersion = AgentVersionSummary & {
   agent_id: string;

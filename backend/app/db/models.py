@@ -156,3 +156,101 @@ class TestSuite(Base):
         UTCDateTime(), nullable=False, default=utc_now, onupdate=utc_now
     )
     version: Mapped[AgentVersion] = relationship(back_populates="test_suite")
+    trace: Mapped["TestSuiteTrace | None"] = relationship(
+        back_populates="test_suite", cascade="all, delete-orphan", uselist=False
+    )
+    evaluation: Mapped["TestSuiteEvaluation | None"] = relationship(
+        back_populates="test_suite", cascade="all, delete-orphan", uselist=False
+    )
+
+
+class TestSuiteTrace(Base):
+    __tablename__ = "traces"
+    __table_args__ = (
+        UniqueConstraint("test_suite_id", name="uq_traces_test_suite_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    test_suite_id: Mapped[str] = mapped_column(
+        ForeignKey("test_suites.id", ondelete="CASCADE"), nullable=False
+    )
+    trace_json: Mapped[Any] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), nullable=False, default=utc_now
+    )
+    test_suite: Mapped[TestSuite] = relationship(back_populates="trace")
+    evaluation: Mapped["TestSuiteEvaluation | None"] = relationship(
+        back_populates="trace", cascade="all, delete-orphan", uselist=False
+    )
+
+
+class TestSuiteEvaluation(Base):
+    __tablename__ = "test_suite_evaluations"
+    __table_args__ = (
+        UniqueConstraint("test_suite_id", name="uq_evaluations_test_suite_id"),
+        UniqueConstraint("trace_id", name="uq_evaluations_trace_id"),
+        CheckConstraint(
+            "status IN ('queued', 'running', 'completed', 'failed')",
+            name="ck_test_suite_evaluations_status",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    test_suite_id: Mapped[str] = mapped_column(
+        ForeignKey("test_suites.id", ondelete="CASCADE"), nullable=False
+    )
+    trace_id: Mapped[str] = mapped_column(
+        ForeignKey("traces.id", ondelete="CASCADE"), nullable=False
+    )
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    judge_model: Mapped[str] = mapped_column(String(255), nullable=False)
+    rubric_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    classification_snapshot: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False
+    )
+    request_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), nullable=False, default=utc_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), nullable=False, default=utc_now, onupdate=utc_now
+    )
+    test_suite: Mapped[TestSuite] = relationship(back_populates="evaluation")
+    trace: Mapped[TestSuiteTrace] = relationship(back_populates="evaluation")
+    evaluations: Mapped[list["Evaluation"]] = relationship(
+        back_populates="evaluation", cascade="all, delete-orphan"
+    )
+
+
+class Evaluation(Base):
+    __tablename__ = "evaluations"
+    __table_args__ = (
+        UniqueConstraint("evaluation_id", "test_case_id", name="uq_evaluations_case"),
+        CheckConstraint(
+            "adherence_score >= 0 AND adherence_score <= 1",
+            name="ck_evaluations_adherence_score",
+        ),
+        CheckConstraint(
+            "consistency_score >= 0 AND consistency_score <= 1",
+            name="ck_evaluations_consistency_score",
+        ),
+        CheckConstraint(
+            "grounding_score >= 0 AND grounding_score <= 1",
+            name="ck_evaluations_grounding_score",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    evaluation_id: Mapped[str] = mapped_column(
+        ForeignKey("test_suite_evaluations.id", ondelete="CASCADE"), nullable=False
+    )
+    test_case_id: Mapped[str] = mapped_column(String(40), nullable=False)
+    category: Mapped[str] = mapped_column(String(64), nullable=False)
+    adherence_score: Mapped[float] = mapped_column(Numeric(5, 4), nullable=False)
+    consistency_score: Mapped[float] = mapped_column(Numeric(5, 4), nullable=False)
+    grounding_score: Mapped[float] = mapped_column(Numeric(5, 4), nullable=False)
+    adherence_explanation: Mapped[str] = mapped_column(Text, nullable=False)
+    consistency_explanation: Mapped[str] = mapped_column(Text, nullable=False)
+    grounding_explanation: Mapped[str] = mapped_column(Text, nullable=False)
+    evaluation: Mapped[TestSuiteEvaluation] = relationship(back_populates="evaluations")

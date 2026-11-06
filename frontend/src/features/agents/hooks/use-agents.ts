@@ -17,6 +17,8 @@ export const agentKeys = {
   versions: (id: string) => ["agents", id, "versions"] as const,
   version: (versionId: string) => ["versions", versionId] as const,
   testSuite: (versionId: string) => ["versions", versionId, "test-suite"] as const,
+  evaluation: (suiteId: string) => ["test-suites", suiteId, "evaluation"] as const,
+  trace: (suiteId: string) => ["test-suites", suiteId, "trace"] as const,
   classifications: ["classifications"] as const,
 };
 
@@ -29,6 +31,11 @@ export function useAgent(id: string) {
     queryKey: agentKeys.detail(id),
     queryFn: ({ signal }) => agentsApi.get(id, signal),
     enabled: Boolean(id),
+    refetchOnWindowFocus: true,
+    refetchInterval: (query) => {
+      const status = query.state.data?.latest_version.evaluation_summary?.status;
+      return status === "queued" || status === "running" ? 2_000 : false;
+    },
   });
 }
 
@@ -37,6 +44,14 @@ export function useVersions(id: string) {
     queryKey: agentKeys.versions(id),
     queryFn: ({ signal }) => versionsApi.list(id, signal),
     enabled: Boolean(id),
+    refetchOnWindowFocus: true,
+    refetchInterval: (query) =>
+      query.state.data?.items.some((version) => {
+        const status = version.evaluation_summary?.status;
+        return status === "queued" || status === "running";
+      })
+        ? 2_000
+        : false,
   });
 }
 
@@ -62,11 +77,48 @@ export function useTestSuite(versionId: string) {
   });
 }
 
+function isNotFound(error: unknown) {
+  return error instanceof Error && "status" in error && error.status === 404;
+}
+
+export function useEvaluation(suiteId: string) {
+  return useQuery({
+    queryKey: agentKeys.evaluation(suiteId),
+    queryFn: ({ signal }) => testSuitesApi.evaluation(suiteId, signal),
+    enabled: Boolean(suiteId),
+    refetchOnWindowFocus: true,
+    retry: (count, error) => !isNotFound(error) && count < 1,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status === "queued" || status === "running" ? 2_000 : false;
+    },
+  });
+}
+
+export function useTrace(suiteId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: agentKeys.trace(suiteId),
+    queryFn: ({ signal }) => testSuitesApi.trace(suiteId, signal),
+    enabled: Boolean(suiteId) && enabled,
+    retry: (count, error) => !isNotFound(error) && count < 1,
+  });
+}
+
 export function useGenerateTestSuite(versionId: string) {
   const client = useQueryClient();
   return useMutation({
     mutationKey: ["generate-test-suite", versionId],
     mutationFn: (totalCount: number) => testSuitesApi.generate(versionId, totalCount),
+    onMutate: async () => {
+      const current = client.getQueryData<TestSuite | null>(agentKeys.testSuite(versionId));
+      if (!current) return;
+      await Promise.all([
+        client.cancelQueries({ queryKey: agentKeys.evaluation(current.id) }),
+        client.cancelQueries({ queryKey: agentKeys.trace(current.id) }),
+      ]);
+      client.removeQueries({ queryKey: agentKeys.evaluation(current.id) });
+      client.removeQueries({ queryKey: agentKeys.trace(current.id) });
+    },
     onSuccess: async (generation: TestSuiteGeneration) => {
       const currentSuite: TestSuite = {
         ...generation,
@@ -74,7 +126,10 @@ export function useGenerateTestSuite(versionId: string) {
         generated_at: null,
       };
       client.setQueryData<TestSuite | null>(agentKeys.testSuite(versionId), currentSuite);
-      await client.invalidateQueries({ queryKey: agentKeys.testSuite(versionId) });
+      await Promise.all([
+        client.invalidateQueries({ queryKey: agentKeys.testSuite(versionId) }),
+        client.invalidateQueries({ queryKey: agentKeys.all }),
+      ]);
     },
   });
 }
@@ -164,6 +219,11 @@ export function useDeleteAgent() {
       ]);
       for (const versionId of versionIds) {
         client.removeQueries({ queryKey: agentKeys.version(versionId) });
+        const suite = client.getQueryData<TestSuite | null>(agentKeys.testSuite(versionId));
+        if (suite) {
+          client.removeQueries({ queryKey: agentKeys.evaluation(suite.id) });
+          client.removeQueries({ queryKey: agentKeys.trace(suite.id) });
+        }
         client.removeQueries({ queryKey: agentKeys.testSuite(versionId) });
       }
       await client.invalidateQueries({ queryKey: agentKeys.all });
