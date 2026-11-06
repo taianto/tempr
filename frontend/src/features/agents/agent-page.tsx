@@ -26,7 +26,23 @@ import {
   useUpdateAgent,
   useVersions,
 } from "./hooks/use-agents";
-import type { AgentSchema, VersionCreateInput } from "./types";
+import type { AgentSchema, EvaluationSummary, VersionCreateInput } from "./types";
+
+function EvaluationLine({ summary }: { summary: EvaluationSummary | null | undefined }) {
+  if (summary?.status === "completed" && summary.overall_score !== null) {
+    const score = Number((summary.overall_score * 100).toFixed(1));
+    return (
+      <p className="mt-2 text-xs text-slate-500">
+        Overall evaluation <span className="mx-1 text-slate-300">·</span>
+        <span className="font-medium text-slate-700">{score}%</span>
+      </p>
+    );
+  }
+  if (summary?.status === "queued" || summary?.status === "running") {
+    return <p className="mt-2 text-xs text-slate-400">Evaluation in progress</p>;
+  }
+  return null;
+}
 
 export function AgentPage() {
   const { agentId = "" } = useParams();
@@ -306,6 +322,7 @@ export function AgentPage() {
                                 : "Not classified"}
                             </span>
                           </p>
+                          <EvaluationLine summary={version.evaluation_summary} />
                         </div>
                       </div>
                       <div className="flex flex-wrap gap-2">

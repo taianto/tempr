@@ -1,12 +1,17 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { ClipboardList, LoaderCircle, RefreshCw, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { CATEGORIES } from "./classification-categories";
+import { TestCaseCard } from "./components/test-case-card";
+import { TraceDialog } from "./components/trace-dialog";
 import { WorkspaceLayout } from "./components/workspace-layout";
 import {
+  agentKeys,
   useAgent,
   useClassify,
+  useEvaluation,
   useGenerateTestSuite,
   useTestSuite,
   useVersion,
@@ -17,12 +22,16 @@ export function TestSuitePage() {
   const agent = useAgent(agentId);
   const version = useVersion(versionId);
   const suite = useTestSuite(versionId);
+  const evaluation = useEvaluation(suite.data?.id ?? "");
   const classify = useClassify(versionId);
   const generate = useGenerateTestSuite(versionId);
+  const queryClient = useQueryClient();
   const [totalCount, setTotalCount] = useState("20");
   const [editingCount, setEditingCount] = useState(false);
   const [phase, setPhase] = useState<"classifying" | "generating" | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [expandedCases, setExpandedCases] = useState<Record<string, boolean>>({});
+  const [traceCaseIndex, setTraceCaseIndex] = useState<number | null>(null);
   const validCount =
     /^\d+$/.test(totalCount) && Number(totalCount) >= 1 && Number(totalCount) <= 100;
   const busy =
@@ -35,6 +44,22 @@ export function TestSuitePage() {
   useEffect(() => {
     if (suite.data?.has_completed_suite) setTotalCount(String(suite.data.requested_count));
   }, [suite.data?.has_completed_suite, suite.data?.requested_count]);
+
+  useEffect(() => {
+    if (!suite.data?.id) return;
+    setExpandedCases({});
+    setTraceCaseIndex(null);
+  }, [suite.data?.id]);
+
+  useEffect(() => {
+    if (evaluation.data?.status === "completed") {
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: agentKeys.detail(agentId) }),
+        queryClient.invalidateQueries({ queryKey: agentKeys.versions(agentId) }),
+        queryClient.invalidateQueries({ queryKey: agentKeys.all }),
+      ]);
+    }
+  }, [evaluation.data?.status, agentId, queryClient]);
   const breadcrumb = [
     { label: agent.data?.name ?? "Agent", to: `/agents/${encodeURIComponent(agentId)}` },
     {
@@ -54,6 +79,8 @@ export function TestSuitePage() {
     )
       return;
 
+    setTraceCaseIndex(null);
+    setExpandedCases({});
     setActionError(null);
     try {
       if (!version.data?.classification) {
@@ -73,6 +100,16 @@ export function TestSuitePage() {
 
   const categoryLabel = (key: string) =>
     CATEGORIES.find((category) => category.key === key)?.label ?? key;
+  const resultsByCase = new Map(
+    (evaluation.data?.results ?? []).map((result) => [result.test_case_id, result]),
+  );
+  const resultsComplete = Boolean(
+    suite.data?.has_completed_suite &&
+      evaluation.data?.status === "completed" &&
+      suite.data.items.length > 0 &&
+      suite.data.items.every((item) => resultsByCase.has(item.id)) &&
+      evaluation.data.results.length === suite.data.items.length,
+  );
 
   return (
     <WorkspaceLayout breadcrumb={breadcrumb}>
@@ -139,39 +176,88 @@ export function TestSuitePage() {
               </section>
             ) : suite.data?.has_completed_suite ? (
               <>
+                <section aria-label="Evaluation status" className="mt-7">
+                  {evaluation.isLoading ? (
+                    <p
+                      role="status"
+                      className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500"
+                    >
+                      Loading evaluation results…
+                    </p>
+                  ) : evaluation.isError &&
+                    (evaluation.error as { status?: number }).status !== 404 ? (
+                    <div
+                      role="alert"
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-200 bg-white px-4 py-3 text-sm text-rose-700"
+                    >
+                      <span>Couldn't load evaluation results: {evaluation.error.message}</span>
+                      <Button variant="outline" size="sm" onClick={() => void evaluation.refetch()}>
+                        Retry
+                      </Button>
+                    </div>
+                  ) : evaluation.data?.status === "queued" ||
+                    evaluation.data?.status === "running" ? (
+                    <p
+                      role="status"
+                      className="rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-3 text-sm text-indigo-700"
+                    >
+                      Evaluation {evaluation.data.status}… Results will appear here when it
+                      finishes.
+                    </p>
+                  ) : evaluation.data?.status === "failed" ? (
+                    <p
+                      role="status"
+                      className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"
+                    >
+                      Evaluation failed.{" "}
+                      {evaluation.data.error ?? "No evaluation results are available."}
+                    </p>
+                  ) : evaluation.data?.status === "completed" && !resultsComplete ? (
+                    <p
+                      role="status"
+                      className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"
+                    >
+                      Evaluation results are incomplete. Scores are hidden until every test case has
+                      a result.
+                    </p>
+                  ) : !evaluation.data ? (
+                    <p className="text-xs text-slate-400">No evaluation results yet.</p>
+                  ) : null}
+                </section>
                 <section aria-label="Generated test suite" className="mt-7 space-y-3">
                   {suite.data.items.map((item, index) => (
-                    <article
+                    <TestCaseCard
                       key={item.id}
-                      className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-soft sm:p-6"
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-sm font-semibold text-indigo-700">
-                          {index + 1}
-                        </span>
-                        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
-                          {categoryLabel(item.category)}
-                        </span>
-                      </div>
-                      <div className="mt-4">
-                        <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                          Question
-                        </h2>
-                        <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-800">
-                          {item.question}
-                        </p>
-                      </div>
-                      <div className="mt-4 border-t border-slate-100 pt-4">
-                        <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                          Acceptance criteria
-                        </h3>
-                        <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-700">
-                          {item.expected_behavior}
-                        </p>
-                      </div>
-                    </article>
+                      item={item}
+                      categoryLabel={categoryLabel(item.category)}
+                      index={index}
+                      result={resultsComplete ? resultsByCase.get(item.id) : undefined}
+                      expanded={Boolean(expandedCases[item.id])}
+                      onToggle={() =>
+                        setExpandedCases((current) => ({
+                          ...current,
+                          [item.id]: !current[item.id],
+                        }))
+                      }
+                      onViewTrace={() => setTraceCaseIndex(index)}
+                    />
                   ))}
                 </section>
+                <TraceDialog
+                  suiteId={suite.data.id}
+                  items={suite.data.items}
+                  result={
+                    resultsComplete && traceCaseIndex !== null
+                      ? resultsByCase.get(suite.data.items[traceCaseIndex]?.id)
+                      : undefined
+                  }
+                  caseIndex={traceCaseIndex}
+                  onCaseChange={setTraceCaseIndex}
+                  open={traceCaseIndex !== null}
+                  onOpenChange={(open) => {
+                    if (!open) setTraceCaseIndex(null);
+                  }}
+                />
                 <div className="mt-5 flex flex-wrap items-end gap-3">
                   {editingCount ? (
                     <>

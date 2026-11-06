@@ -3,7 +3,9 @@ import type {
   AgentVersionListResponse,
   Classification,
   TestSuite,
+  TestSuiteEvaluation,
   TestSuiteGeneration,
+  TestSuiteTrace,
   VersionCreateInput,
 } from "./types";
 import {
@@ -127,4 +129,10 @@ export const testSuitesApi = {
       `/versions/${encodeURIComponent(versionId)}/test-suites/generate`,
       { method: "POST", body: { total_count: totalCount } },
     ),
+  evaluation: (suiteId: string, signal?: AbortSignal) =>
+    request<TestSuiteEvaluation>(`/test-suites/${encodeURIComponent(suiteId)}/evaluation`, {
+      signal,
+    }),
+  trace: (suiteId: string, signal?: AbortSignal) =>
+    request<TestSuiteTrace>(`/test-suites/${encodeURIComponent(suiteId)}/trace`, { signal }),
 };

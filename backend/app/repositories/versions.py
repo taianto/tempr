@@ -1,11 +1,17 @@
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
-from app.db.models import Agent, AgentVersion
+from app.db.models import (
+    Agent,
+    AgentVersion,
+    Evaluation,
+    TestSuite,
+    TestSuiteEvaluation,
+)
 
 
 def _id() -> str:
@@ -57,6 +63,72 @@ class VersionRepository:
                 .order_by(AgentVersion.created_at.desc(), AgentVersion.id.desc())
             ).all()
         )
+
+    def evaluation_summaries(self, version_ids: list[str]) -> dict[str, dict[str, Any]]:
+        """Load compact evaluation summaries for a batch of versions."""
+        if not version_ids:
+            return {}
+
+        sources = self.db.execute(
+            select(
+                AgentVersion.id,
+                TestSuite.result_json,
+                TestSuiteEvaluation.id,
+                TestSuiteEvaluation.status,
+            )
+            .outerjoin(TestSuite, TestSuite.version_id == AgentVersion.id)
+            .outerjoin(
+                TestSuiteEvaluation, TestSuiteEvaluation.test_suite_id == TestSuite.id
+            )
+            .where(AgentVersion.id.in_(version_ids))
+        ).all()
+        evaluation_sources = {
+            version_id: (suite_result, evaluation_id, status)
+            for version_id, suite_result, evaluation_id, status in sources
+            if evaluation_id is not None
+        }
+        evaluation_ids = [source[1] for source in evaluation_sources.values()]
+        if not evaluation_ids:
+            return {}
+
+        aggregates = self.db.execute(
+            select(
+                Evaluation.evaluation_id,
+                func.count(Evaluation.id),
+                func.avg(Evaluation.adherence_score),
+                func.avg(Evaluation.consistency_score),
+                func.avg(Evaluation.grounding_score),
+            )
+            .where(Evaluation.evaluation_id.in_(evaluation_ids))
+            .group_by(Evaluation.evaluation_id)
+        ).all()
+        aggregate_by_id = {row[0]: row[1:] for row in aggregates}
+
+        summaries: dict[str, dict[str, Any]] = {}
+        for version_id, (
+            suite_result,
+            evaluation_id,
+            status,
+        ) in evaluation_sources.items():
+            result_count, adherence, consistency, grounding = aggregate_by_id.get(
+                evaluation_id, (0, None, None, None)
+            )
+            suite_items = (suite_result or {}).get("items", [])
+            overall_score = None
+            if (
+                status == "completed"
+                and suite_items
+                and result_count == len(suite_items)
+                and adherence is not None
+                and consistency is not None
+                and grounding is not None
+            ):
+                overall_score = float((adherence + consistency + grounding) / 3)
+            summaries[version_id] = {
+                "status": status,
+                "overall_score": overall_score,
+            }
+        return summaries
 
     def get(self, version_id: str) -> AgentVersion | None:
         return self.db.scalar(

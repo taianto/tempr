@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { classificationsApi, versionsApi } from "./api";
+import { classificationsApi, testSuitesApi, versionsApi } from "./api";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -45,5 +45,22 @@ describe("resource API clients", () => {
     expect(fetch.mock.calls[0][0]).toBe("/api/v1/classifications?refresh=true");
     expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({ version_id: "agv-1" });
     expect(fetch.mock.calls[1][0]).toBe("/api/v1/classifications/cls-1");
+  });
+
+  it("retrieves evaluations and traces by suite ID", async () => {
+    const fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({}),
+    });
+    vi.stubGlobal("fetch", fetch);
+
+    await testSuitesApi.evaluation("ts/one");
+    await testSuitesApi.trace("ts/one");
+
+    expect(fetch.mock.calls.map(([url]) => url)).toEqual([
+      "/api/v1/test-suites/ts%2Fone/evaluation",
+      "/api/v1/test-suites/ts%2Fone/trace",
+    ]);
   });
 });

@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -48,6 +48,11 @@ class InitialVersion(VersionCreate):
     version: str = Field(default="1.0", min_length=1, max_length=64)
 
 
+class EvaluationSummary(BaseModel):
+    status: Literal["queued", "running", "completed", "failed"]
+    overall_score: float | None
+
+
 class VersionCreateRequest(VersionCreate):
     agent_id: str
 
@@ -57,14 +62,20 @@ class AgentVersionSummary(BaseModel):
     version: str
     created_at: datetime
     classification_id: str | None
+    evaluation_summary: EvaluationSummary | None = None
 
     @classmethod
-    def from_record(cls, version: AgentVersion) -> "AgentVersionSummary":
+    def from_record(
+        cls,
+        version: AgentVersion,
+        evaluation_summary: EvaluationSummary | dict[str, Any] | None = None,
+    ) -> "AgentVersionSummary":
         return cls(
             id=version.id,
             version=version.version,
             created_at=version.created_at,
             classification_id=version.classification_id,
+            evaluation_summary=evaluation_summary,
         )
 
 
@@ -75,9 +86,13 @@ class AgentVersionResponse(AgentVersionSummary):
     classification: ClassificationResponse | None
 
     @classmethod
-    def from_record(cls, version: AgentVersion) -> "AgentVersionResponse":
+    def from_record(
+        cls,
+        version: AgentVersion,
+        evaluation_summary: EvaluationSummary | dict[str, Any] | None = None,
+    ) -> "AgentVersionResponse":
         return cls(
-            **AgentVersionSummary.from_record(version).model_dump(),
+            **AgentVersionSummary.from_record(version, evaluation_summary).model_dump(),
             agent_id=version.agent_id,
             schema_=AgentSchema(
                 description=version.description,

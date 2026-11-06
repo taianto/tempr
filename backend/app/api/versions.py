@@ -30,8 +30,13 @@ def create_version(
 def list_versions(
     db: Annotated[Session, Depends(get_db)], agent_id: Annotated[str, Query()]
 ) -> AgentVersionListResponse:
-    versions = VersionService(db).list_for_agent(agent_id)
-    items = [AgentVersionSummary.from_record(version) for version in versions]
+    service = VersionService(db)
+    versions = service.list_for_agent(agent_id)
+    summaries = service.evaluation_summaries([version.id for version in versions])
+    items = [
+        AgentVersionSummary.from_record(version, summaries.get(version.id))
+        for version in versions
+    ]
     return AgentVersionListResponse(items=items, total=len(items))
 
 
@@ -39,4 +44,7 @@ def list_versions(
 def get_version(
     version_id: str, db: Annotated[Session, Depends(get_db)]
 ) -> AgentVersionResponse:
-    return AgentVersionResponse.from_record(VersionService(db).get(version_id))
+    service = VersionService(db)
+    version = service.get(version_id)
+    summaries = service.evaluation_summaries([version_id])
+    return AgentVersionResponse.from_record(version, summaries.get(version_id))

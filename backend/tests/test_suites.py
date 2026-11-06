@@ -371,6 +371,15 @@ def test_evaluation_scores_each_case_and_reuses_completed_result(
     assert completed["results"][0]["test_case_id"] == "tc_suite"
     assert completed["results"][0]["grounding_score"] == 0.5
 
+    version_summaries = client.get("/api/v1/versions?agent_id=agt_suite").json()
+    summary = version_summaries["items"][0]["evaluation_summary"]
+    assert summary["status"] == "completed"
+    assert summary["overall_score"] == pytest.approx((0.8 + 1.0 + 0.5) / 3)
+    agent_summary = client.get("/api/v1/agents/agt_suite").json()["latest_version"][
+        "evaluation_summary"
+    ]
+    assert agent_summary == summary
+
     repeated = client.post(EVALUATION_PATH)
     assert repeated.status_code == 200
     assert repeated.json()["id"] == body["id"]

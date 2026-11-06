@@ -28,7 +28,7 @@ vi.mock("./api", () => ({
   },
   versionsApi: { list: vi.fn(), get: vi.fn(), create: vi.fn() },
   classificationsApi: { classify: vi.fn(), get: vi.fn() },
-  testSuitesApi: { get: vi.fn(), generate: vi.fn() },
+  testSuitesApi: { get: vi.fn(), generate: vi.fn(), evaluation: vi.fn(), trace: vi.fn() },
 }));
 
 const scoreKeys: (keyof ClassificationScores)[] = [
@@ -107,6 +107,7 @@ const generatedSuite: TestSuite = {
   generated_at: "2026-10-15T10:00:00Z",
   items: [
     {
+      id: "tc-1",
       category: "happy_path",
       question: "Can I get a refund?",
       expected_behavior: "Explain the refund process.",
@@ -186,6 +187,12 @@ beforeEach(() => {
     return generated;
   });
   vi.mocked(testSuitesApi.get).mockResolvedValue(null);
+  vi.mocked(testSuitesApi.evaluation).mockRejectedValue(
+    Object.assign(new Error("Evaluation not found"), { status: 404 }),
+  );
+  vi.mocked(testSuitesApi.trace).mockRejectedValue(
+    Object.assign(new Error("Trace not found"), { status: 404 }),
+  );
   vi.mocked(testSuitesApi.generate).mockResolvedValue({
     ...generatedSuite,
     items: undefined,
@@ -202,6 +209,16 @@ describe("versioned agent workspace", () => {
     expect(
       screen.getByText("Classify your agent to plan its first test suite"),
     ).toBeInTheDocument();
+  });
+
+  it("shows a compact overall evaluation score beneath an evaluated version", async () => {
+    vi.mocked(versionsApi.list).mockResolvedValue({
+      items: [{ ...v2, evaluation_summary: { status: "completed", overall_score: 0.76666 } }, v1],
+      total: 2,
+    });
+    renderRoute("/agents/agt-1");
+    expect(await screen.findByText("76.7%")).toBeInTheDocument();
+    expect(screen.getByText(/Overall evaluation/)).toBeInTheDocument();
   });
 
   it("sorts category bars with stable ties, generates the latest version, and retains scores after a failed refresh", async () => {
@@ -369,6 +386,143 @@ describe("versioned agent workspace", () => {
     expect(await screen.findByText("Can I get a refund?")).toBeInTheDocument();
     expect(classificationsApi.classify).toHaveBeenCalledWith("agv-2", false);
     expect(testSuitesApi.generate).toHaveBeenCalledWith("agv-2", 20);
+  });
+
+  it("shows matching rubric scores and expands each explanation", async () => {
+    const user = userEvent.setup();
+    vi.mocked(testSuitesApi.get).mockResolvedValue(generatedSuite);
+    vi.mocked(testSuitesApi.evaluation).mockResolvedValue({
+      id: "ev-1",
+      test_suite_id: "ts-1",
+      trace_id: "tr-1",
+      status: "completed",
+      judge_model: "judge",
+      rubric_version: "1",
+      classification_snapshot: {},
+      error: null,
+      created_at: "2026-10-15T10:00:00Z",
+      updated_at: "2026-10-15T10:00:00Z",
+      results: [
+        {
+          id: "result-1",
+          test_case_id: "tc-1",
+          category: "happy_path",
+          adherence_score: 0.8,
+          consistency_score: 1,
+          grounding_score: 0.5,
+          adherence_explanation: "The answer explains the process.",
+          consistency_explanation: "The messages agree.",
+          grounding_explanation: "No source was provided.",
+        },
+      ],
+    });
+    renderRoute("/agents/agt-1/versions/agv-2/test-suite");
+
+    expect(await screen.findAllByText("80%")).toHaveLength(2);
+    expect(screen.getAllByText("100%")).toHaveLength(2);
+    await user.click(screen.getByRole("button", { name: "View breakdown" }));
+    expect(screen.getByText("The answer explains the process.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Hide breakdown" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+  });
+
+  it("hides category scores when a completed evaluation is missing a case result", async () => {
+    vi.mocked(testSuitesApi.get).mockResolvedValue(generatedSuite);
+    vi.mocked(testSuitesApi.evaluation).mockResolvedValue({
+      id: "ev-incomplete",
+      test_suite_id: "ts-1",
+      trace_id: "tr-1",
+      status: "completed",
+      judge_model: "judge",
+      rubric_version: "1",
+      classification_snapshot: {},
+      error: null,
+      created_at: "2026-10-15T10:00:00Z",
+      updated_at: "2026-10-15T10:00:00Z",
+      results: [],
+    });
+    renderRoute("/agents/agt-1/versions/agv-2/test-suite");
+
+    expect(await screen.findByText(/Evaluation results are incomplete/)).toBeInTheDocument();
+    expect(screen.queryByText("0%")).not.toBeInTheDocument();
+  });
+
+  it("opens a case trace with the final response and navigable steps", async () => {
+    const user = userEvent.setup();
+    vi.mocked(testSuitesApi.get).mockResolvedValue({
+      ...generatedSuite,
+      items: [generatedSuite.items[0], { ...generatedSuite.items[0], id: "tc-2" }],
+    });
+    vi.mocked(testSuitesApi.evaluation).mockResolvedValue({
+      id: "ev-1",
+      test_suite_id: "ts-1",
+      trace_id: "tr-1",
+      status: "completed",
+      judge_model: "judge",
+      rubric_version: "1",
+      classification_snapshot: {},
+      error: null,
+      created_at: "2026-10-15T10:00:00Z",
+      updated_at: "2026-10-15T10:00:00Z",
+      results: [
+        {
+          id: "result-1",
+          test_case_id: "tc-1",
+          category: "happy_path",
+          adherence_score: 0.8,
+          consistency_score: 1,
+          grounding_score: 0.5,
+          adherence_explanation: "The answer explains the process.",
+          consistency_explanation: "The messages agree.",
+          grounding_explanation: "No source was provided.",
+        },
+        {
+          id: "result-2",
+          test_case_id: "tc-2",
+          category: "happy_path",
+          adherence_score: 0.8,
+          consistency_score: 1,
+          grounding_score: 0.5,
+          adherence_explanation: "The answer explains the process.",
+          consistency_explanation: "The messages agree.",
+          grounding_explanation: "No source was provided.",
+        },
+      ],
+    });
+    vi.mocked(testSuitesApi.trace).mockResolvedValue({
+      id: "tr-1",
+      test_suite_id: "ts-1",
+      created_at: "2026-10-15T10:00:00Z",
+      trace: {
+        executions: [
+          {
+            test_case_id: "tc-1",
+            execution: {
+              final_response: "Your refund will arrive in five days.",
+              messages: [{ role: "assistant", content: "Your refund will arrive in five days." }],
+              tool_calls: [{ name: "lookup_refund", arguments: { order: "123" } }],
+              custom: { retained: true },
+            },
+          },
+        ],
+      },
+    });
+    renderRoute("/agents/agt-1/versions/agv-2/test-suite");
+
+    await user.click((await screen.findAllByRole("button", { name: "View trace & response" }))[0]);
+    expect(await screen.findAllByText("Your refund will arrive in five days.")).toHaveLength(2);
+    expect(screen.getByText("Tool call")).toBeInTheDocument();
+    expect(screen.getByLabelText("Evaluation scores")).toHaveTextContent("Adherence80%");
+    expect(screen.getByLabelText("Evaluation scores")).toHaveTextContent("Consistency100%");
+    expect(screen.getByLabelText("Evaluation scores")).toHaveTextContent("Grounding50%");
+    await user.click(screen.getByRole("button", { name: "Raw JSON" }));
+    expect(screen.getByText(/retained/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Next test case" }));
+    expect(
+      await screen.findByText("This test case has no execution in the uploaded trace."),
+    ).toBeInTheDocument();
   });
 
   it("submits agent creation with the nested initial version contract", async () => {

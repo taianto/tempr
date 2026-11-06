@@ -15,6 +15,9 @@ class VersionService:
         self.agents = AgentRepository(db)
         self.repository = VersionRepository(db)
 
+    def evaluation_summaries(self, version_ids: list[str]) -> dict[str, dict[str, Any]]:
+        return self.repository.evaluation_summaries(version_ids)
+
     def create(self, agent_id: str, data: dict[str, Any]) -> AgentVersion:
         if self.agents.get(agent_id) is None:
             raise HTTPException(status_code=404, detail="Agent not found")
