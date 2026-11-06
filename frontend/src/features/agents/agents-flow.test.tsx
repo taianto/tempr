@@ -331,10 +331,11 @@ describe("versioned agent workspace", () => {
     ).toBeInTheDocument();
   });
 
-  it("restores selected columns from the URL, adds a version after its column, and generates it only on request", async () => {
+  it("restores selected columns, keeps the clicked version as the reference, and adds versions", async () => {
     const user = userEvent.setup();
     renderRoute("/agents/agt-1/compare?versions=agv-1");
     expect(await screen.findByRole("columnheader", { name: /version 1\.0/i })).toBeInTheDocument();
+    expect(screen.getByText("Reference")).toBeInTheDocument();
     const menus = screen.getAllByLabelText("Add a version to comparison");
     menus[0].focus();
     await user.keyboard("{Enter}");
@@ -343,17 +344,20 @@ describe("versioned agent workspace", () => {
       await screen.findByRole("columnheader", { name: /version 2\.0-beta/i }),
     ).toBeInTheDocument();
     expect(screen.getByTestId("location")).toHaveTextContent("versions=agv-1%2Cagv-2");
+    expect(screen.queryByRole("button", { name: "Remove version 1.0" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Remove version 2.0-beta" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Remove version 2.0-beta" }));
+    expect(screen.getByTestId("location")).toHaveTextContent("versions=agv-1");
+    expect(
+      screen.queryByRole("columnheader", { name: /version 2\.0-beta/i }),
+    ).not.toBeInTheDocument();
+    await user.click(screen.getAllByLabelText("Add a version to comparison")[0]);
+    await user.click(screen.getByRole("menuitem", { name: "Version 2.0-beta" }));
     const duplicateMenu = screen.getAllByLabelText("Add a version to comparison")[0];
     await user.click(duplicateMenu);
     expect(screen.queryByRole("menuitem", { name: "Version 1.0" })).not.toBeInTheDocument();
     await user.keyboard("{Escape}");
-
-    const classifyButton = screen.getByRole("button", {
-      name: /generate classification for this version/i,
-    });
-    await user.click(classifyButton);
-    await waitFor(() => expect(classificationsApi.classify).toHaveBeenCalledWith("agv-2", false));
-    expect(await screen.findAllByText("13%")).toHaveLength(8);
+    expect(screen.getByRole("heading", { name: "Compare evaluations" })).toBeInTheDocument();
   });
 
   it("defaults a comparison with no version parameter to the latest version", async () => {
@@ -364,16 +368,112 @@ describe("versioned agent workspace", () => {
     ).toBeInTheDocument();
   });
 
-  it("marks a version from another agent unavailable and hides classification actions", async () => {
+  it("marks a version from another agent unavailable", async () => {
     vi.mocked(versionsApi.get).mockResolvedValue({ ...v1, agent_id: "agt-other" });
     renderRoute("/agents/agt-1/compare?versions=agv-1");
 
     expect(
       await screen.findByRole("columnheader", { name: /unavailable version/i }),
     ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: /generate classification for this version/i }),
-    ).not.toBeInTheDocument();
+  });
+
+  it("expands category rubric averages and compares them with the clicked reference", async () => {
+    const user = userEvent.setup();
+    const suite = (versionId: string, suiteId: string): TestSuite => ({
+      ...generatedSuite,
+      id: suiteId,
+      version_id: versionId,
+      items: [{ ...generatedSuite.items[0], id: `${suiteId}-case`, category: "happy_path" }],
+    });
+    const evaluation = (suiteId: string, scores: [number, number, number]) => ({
+      id: `ev-${suiteId}`,
+      test_suite_id: suiteId,
+      trace_id: `tr-${suiteId}`,
+      status: "completed" as const,
+      judge_model: "judge",
+      rubric_version: "1",
+      classification_snapshot: {},
+      error: null,
+      created_at: "2026-10-15T10:00:00Z",
+      updated_at: "2026-10-15T10:00:00Z",
+      results: [
+        {
+          id: `result-${suiteId}`,
+          test_case_id: `${suiteId}-case`,
+          category: "happy_path",
+          adherence_score: scores[0],
+          consistency_score: scores[1],
+          grounding_score: scores[2],
+          adherence_explanation: "adherence",
+          consistency_explanation: "consistency",
+          grounding_explanation: "grounding",
+        },
+      ],
+    });
+    vi.mocked(testSuitesApi.get).mockImplementation(async (versionId) =>
+      versionId === "agv-1" ? suite("agv-1", "suite-1") : suite("agv-2", "suite-2"),
+    );
+    vi.mocked(testSuitesApi.evaluation).mockImplementation(async (suiteId) =>
+      suiteId === "suite-1"
+        ? evaluation(suiteId, [0.4, 0.5, 0.6])
+        : evaluation(suiteId, [0.8, 1, 0.5]),
+    );
+
+    renderRoute("/agents/agt-1/compare?versions=agv-1,agv-2");
+    expect(await screen.findByText("50%", { selector: "span" })).toBeInTheDocument();
+    expect(screen.getByText("↑", { selector: "span" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Happy path" }));
+    expect(screen.getByRole("button", { name: "Happy path" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    expect(screen.getByText("Adherence")).toBeInTheDocument();
+    expect(screen.getByText("Consistency")).toBeInTheDocument();
+    expect(screen.getByText("Grounding")).toBeInTheDocument();
+  });
+
+  it("shows a down arrow when the selected reference scores higher", async () => {
+    const suite = (versionId: string, suiteId: string): TestSuite => ({
+      ...generatedSuite,
+      id: suiteId,
+      version_id: versionId,
+      items: [{ ...generatedSuite.items[0], id: `${suiteId}-case`, category: "happy_path" }],
+    });
+    const evaluated = (suiteId: string, score: number) => ({
+      id: `ev-${suiteId}`,
+      test_suite_id: suiteId,
+      trace_id: `tr-${suiteId}`,
+      status: "completed" as const,
+      judge_model: "judge",
+      rubric_version: "1",
+      classification_snapshot: {},
+      error: null,
+      created_at: "2026-10-15T10:00:00Z",
+      updated_at: "2026-10-15T10:00:00Z",
+      results: [
+        {
+          id: `result-${suiteId}`,
+          test_case_id: `${suiteId}-case`,
+          category: "happy_path",
+          adherence_score: score,
+          consistency_score: score,
+          grounding_score: score,
+          adherence_explanation: "adherence",
+          consistency_explanation: "consistency",
+          grounding_explanation: "grounding",
+        },
+      ],
+    });
+    vi.mocked(testSuitesApi.get).mockImplementation(async (versionId) =>
+      versionId === "agv-1" ? suite("agv-1", "suite-1") : suite("agv-2", "suite-2"),
+    );
+    vi.mocked(testSuitesApi.evaluation).mockImplementation(async (suiteId) =>
+      suiteId === "suite-1" ? evaluated(suiteId, 0.4) : evaluated(suiteId, 0.8),
+    );
+
+    renderRoute("/agents/agt-1/compare?versions=agv-2,agv-1");
+    expect(await screen.findByText("↓", { selector: "span" })).toBeInTheDocument();
+    expect(screen.queryByText("↑", { selector: "span" })).not.toBeInTheDocument();
   });
 
   it("classifies an unclassified version before generating its test suite", async () => {
