@@ -1,4 +1,4 @@
-import { ChevronRight, Layers3, Sparkles } from "lucide-react";
+import { ChevronRight, Layers3 } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useAgents } from "../hooks/use-agents";
@@ -54,17 +54,6 @@ export function WorkspaceLayout({
               API Docs<span className="ml-auto text-xs text-slate-400">↗</span>
             </a>
           </nav>
-        </div>
-        <div className="mt-auto p-4">
-          <div className="rounded-xl border border-slate-200/80 bg-slate-50/80 p-4">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-indigo-600 shadow-sm">
-              <Sparkles size={16} />
-            </div>
-            <p className="mt-3 text-sm font-medium text-slate-800">Build with confidence</p>
-            <p className="mt-1 text-xs leading-5 text-slate-500">
-              Test your agents against the unexpected.
-            </p>
-          </div>
         </div>
       </aside>
       <div className="lg:pl-[248px]">
