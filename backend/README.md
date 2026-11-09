@@ -4,17 +4,22 @@ FastAPI service for versioned agent definitions, classification, test generation
 
 ## Run locally
 
-Requires Python 3.12 or newer. From the repository root:
+Requires Python 3.12 or newer. From the repository root, create the shared environment file once:
+
+```bash
+cp .env.example .env
+```
+
+Set `OPENAI_API_KEY` in the root `.env` to enable classification, test generation, and evaluation. Agent management and saved-data browsing work without a key.
+
+Then install and run the backend:
 
 ```bash
 cd backend
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -e '.[dev]'
-cp .env.example .env
 ```
-
-Set `OPENAI_API_KEY` in `backend/.env` to enable classification, test generation, and evaluation. Agent management and saved-data browsing work without a key.
 
 Run migrations and start the API in the same terminal:
 
@@ -29,7 +34,7 @@ Start the [frontend](../frontend/README.md) in a separate terminal to use the wo
 
 ## Configuration
 
-The backend loads `backend/.env`; environment variables override values in that file. Restart the API after changing settings.
+The backend loads the shared repository-root `.env`; environment variables override values in that file. Restart the API after changing settings. Docker Compose uses the same file and sets the database URL to its persistent container volume.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |

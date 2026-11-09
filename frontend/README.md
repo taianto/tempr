@@ -32,7 +32,7 @@ The development server proxies `/api`, `/docs`, and `/openapi.json` to the backe
 
 ## Configuration
 
-For overrides, copy `.env.example` to `.env.local` in `frontend/`. Restart Vite after changes; deployment settings must be present when building.
+Vite reads `VITE_*` settings from the shared repository-root `.env`, the same file used by Docker Compose and the backend. Copy the root `.env.example` to `.env` once, then restart Vite after changes. Frontend settings must be present when building.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
@@ -40,7 +40,7 @@ For overrides, copy `.env.example` to `.env.local` in `frontend/`. Restart Vite 
 | `VITE_API_BASE_URL` | Empty | API origin. Requests append `/api/v1`, so omit that suffix from this value. Empty uses the frontend's origin. |
 | `VITE_API_DOCS_URL` | `/docs` | Target for the **API Docs** link. Set separately when hosting the API elsewhere. |
 
-Keep provider credentials such as `OPENAI_API_KEY` in the backend environment. `VITE_*` values are exposed to the browser.
+Keep provider credentials such as `OPENAI_API_KEY` in the root `.env`; only the backend receives them. `VITE_*` values are included in the frontend bundle and exposed to the browser.
 
 ## Build and host
 

@@ -2,6 +2,18 @@
 
 **Understand your AI agents. Test their limits. Measure what improves.**
 
+## Quickstart
+
+Install [Docker Desktop](https://docs.docker.com/get-started/get-docker/) or Docker Engine with the Compose plugin, then run from the repository root:
+
+```bash
+cp .env.example .env
+# Set OPENAI_API_KEY in .env to enable classification, test generation, and evaluation.
+docker compose up --build
+```
+
+Open [http://localhost:8080](http://localhost:8080). The app starts without an API key; agent management and saved-data browsing work, while AI-powered features need one. Compose uses `backend/data/app.db` directly, so it shares data with a local backend run and keeps it across restarts. Stop the app with `Ctrl+C` or `docker compose down`.
+
 tempr is a platform for evaluating AI agents, taking teams from an agent definition to a focused test plan, generated scenarios, and explained evaluation results. It brings configuration history, testing priorities, execution evidence, and version comparisons into one workspace.
 
 For businesses putting AI agents to work, the central question is whether those agents behave reliably when requests become difficult, incomplete, or adversarial. tempr helps teams investigate that question and use the findings to improve their agents before deployment.
