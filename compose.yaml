@@ -1,0 +1,38 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    environment:
+      DATABASE_URL: sqlite:////data/app.db
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      CLASSIFICATION_MODEL: ${CLASSIFICATION_MODEL:-gpt-6-luna}
+      CLASSIFICATION_TIMEOUT_SECONDS: ${CLASSIFICATION_TIMEOUT_SECONDS:-30}
+      TEST_GENERATION_MODEL: ${TEST_GENERATION_MODEL:-}
+      TEST_GENERATION_TIMEOUT_SECONDS: ${TEST_GENERATION_TIMEOUT_SECONDS:-120}
+      EVALUATION_MODEL: ${EVALUATION_MODEL:-}
+      EVALUATION_TIMEOUT_SECONDS: ${EVALUATION_TIMEOUT_SECONDS:-120}
+    volumes:
+      - ./backend/data:/data
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=3)
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
+        VITE_API_DOCS_URL: ${VITE_API_DOCS_URL:-/docs}
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8080:80"
+
