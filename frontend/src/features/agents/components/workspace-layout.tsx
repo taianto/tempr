@@ -2,6 +2,7 @@ import { ChevronRight, Layers3, Sparkles } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useAgents } from "../hooks/use-agents";
+import { ThemeSelector } from "./theme-selector";
 
 const API_DOCS_URL = import.meta.env.VITE_API_DOCS_URL || "/docs";
 
@@ -14,7 +15,7 @@ export function WorkspaceLayout({
 }) {
   const agents = useAgents();
   return (
-    <div className="min-h-screen bg-[#f7f8fa] text-slate-900">
+    <div className="min-h-screen bg-background text-foreground">
       <aside className="fixed inset-y-0 left-0 z-10 hidden w-[248px] flex-col border-r border-slate-200/80 bg-white lg:flex">
         <Link
           to="/agents"
@@ -67,8 +68,11 @@ export function WorkspaceLayout({
         </div>
       </aside>
       <div className="lg:pl-[248px]">
-        <header className="sticky top-0 z-20 flex h-[72px] items-center justify-between border-b border-slate-200/80 bg-white/90 px-5 backdrop-blur-md sm:px-8 lg:px-10">
-          <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-2 text-sm">
+        <header className="sticky top-0 z-20 flex h-[72px] items-center justify-between gap-3 border-b border-slate-200/80 bg-white/90 px-4 backdrop-blur-md sm:px-8 lg:px-10">
+          <nav
+            aria-label="Breadcrumb"
+            className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden text-sm"
+          >
             <Link to="/agents" className="font-medium text-slate-500 hover:text-slate-900">
               Agents
             </Link>
@@ -90,14 +94,19 @@ export function WorkspaceLayout({
               </span>
             ))}
           </nav>
-          <span
-            className={`hidden items-center gap-2 rounded-full border border-slate-200 px-3 py-1.5 text-xs text-slate-500 sm:inline-flex`}
-          >
-            <span
-              className={`h-1.5 w-1.5 rounded-full ${agents.isError ? "bg-rose-500" : agents.isSuccess ? "bg-emerald-500" : "bg-amber-400"}`}
-            />
-            {agents.isError ? "API unavailable" : agents.isSuccess ? "API connected" : "Connecting"}
-          </span>
+          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+            <ThemeSelector />
+            <span className="hidden items-center gap-2 rounded-full border border-slate-200 px-3 py-1.5 text-xs text-slate-500 sm:inline-flex">
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${agents.isError ? "bg-rose-500" : agents.isSuccess ? "bg-emerald-500" : "bg-amber-400"}`}
+              />
+              {agents.isError
+                ? "API unavailable"
+                : agents.isSuccess
+                  ? "API connected"
+                  : "Connecting"}
+            </span>
+          </div>
         </header>
         <div className="mx-auto max-w-[1240px] px-5 pb-16 pt-9 sm:px-8 sm:pt-11 lg:px-10">
           {children}
