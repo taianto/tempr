@@ -4,6 +4,20 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#f7f8fa" />
+    <script>
+      (() => {
+        let preference;
+        try {
+          preference = localStorage.getItem("tempr-theme");
+        } catch {}
+        const followsSystem = preference !== "light" && preference !== "dark";
+        const systemDark = window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false;
+        const dark = preference === "dark" || (followsSystem && systemDark);
+        if (dark) document.documentElement.classList.add("dark");
+        document.documentElement.style.colorScheme = dark ? "dark" : "light";
+        document.querySelector('meta[name="theme-color"]')?.setAttribute("content", dark ? "#141416" : "#f7f8fa");
+      })();
+    </script>
     <meta name="description" content="Explore and manage your AI agents with Tempr." />
     <link rel="icon" type="image/png" href="/tempr.png" />
     <title>tempr</title>
