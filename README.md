@@ -100,6 +100,8 @@ In the example shown, the boundary-probe score rises from 28.3% to 91.7%, while 
 
 React, TypeScript, Vite, and Tailwind power the workspace. FastAPI, Pydantic, SQLAlchemy, and Alembic provide the API, validation, persistence, and migrations. SQLite keeps local setup lightweight; PostgreSQL can be configured through the database URL.
 
+Explore the API with the [agent examples](examples/README.md), which include a one-command Task Manager evaluation and explain how to read and extend the code.
+
 **Run locally:** [Backend setup](backend/README.md) · [Frontend setup](frontend/README.md)
 
 ## Git hooks
