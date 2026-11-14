@@ -1,0 +1,7 @@
+[project]
+name = "tempr-examples"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = ["httpx>=0.27,<1", "langchain>=1.0,<2", "langchain-openai>=1.0,<2", "python-dotenv>=1.0,<2"]
+[project.optional-dependencies]
+dev = ["pytest>=8,<9", "ruff>=0.9,<1"]
