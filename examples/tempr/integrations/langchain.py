@@ -1,5 +1,9 @@
 from typing import Any
 
+from tempr.integrations.tracing import TracedAgent, TracedRun
+
+__all__ = ["TracedAgent", "TracedRun", "configuration"]
+
 
 def configuration(
     name: str, description: str, model_name: str, prompt: str, tools: list[Any]

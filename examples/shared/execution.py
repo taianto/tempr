@@ -1,4 +1,5 @@
-from shared.trace import capture, case_execution
+from shared.trace import case_execution
+from tempr.integrations.langchain import TracedAgent
 
 
 def run_test_cases(definition, cases):
@@ -6,9 +7,10 @@ def run_test_cases(definition, cases):
     for index, case in enumerate(cases, 1):
         try:
             agent = definition.create()
-            executions.append(
-                case_execution(case, capture(agent.run(case["question"])))
+            traced = TracedAgent(agent.graph).run(
+                {"messages": [("user", case["question"])]}
             )
+            executions.append(traced.for_case(case["id"]))
             print(f"Ran case {index}/{len(cases)}")
         except Exception as exc:  # noqa: BLE001 — record failures for every case.
             failures += 1

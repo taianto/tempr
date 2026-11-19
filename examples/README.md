@@ -29,7 +29,7 @@ Each invocation finds or creates the named platform agent, adds its next version
 
 `shared/` contains decisions made by this example runner: loading settings, finding an agent by name, incrementing its version, waiting for background jobs, running cases, recording traces, and printing results. These helpers compose the end-to-end workflow.
 
-`tempr/` contains direct HTTP calls to the platform. Its LangChain integration converts prompts, tools, and messages to the configuration and trace shapes Tempr accepts. It does not choose versions or wait for jobs.
+`tempr/` contains direct HTTP calls to the platform. Its LangChain integration converts prompts and tools for agent registration. `TracedAgent` wraps a LangChain agent, runs it, and returns the original output alongside an ordered Tempr trace. Pass `run.for_case(test_case_id)` in the suite's `executions` list; the wrapper handles the trace formatting.
 
 ## Read the code
 
