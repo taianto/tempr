@@ -76,7 +76,11 @@ class VersionRepository:
                 TestSuiteEvaluation.id,
                 TestSuiteEvaluation.status,
             )
-            .outerjoin(TestSuite, TestSuite.version_id == AgentVersion.id)
+            .outerjoin(
+                TestSuite,
+                (TestSuite.version_id == AgentVersion.id)
+                & (TestSuite.status == "completed"),
+            )
             .outerjoin(
                 TestSuiteEvaluation, TestSuiteEvaluation.test_suite_id == TestSuite.id
             )

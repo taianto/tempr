@@ -35,7 +35,16 @@ class TestSuiteService:
             VersionService(self.db).get(version_id)
         except HTTPException as exc:
             raise TestSuiteServiceError(exc.status_code, exc.detail) from exc
+        self._expire_stale_generation(version_id)
         return self.repository.get(version_id)
+
+    def get_generation(self, version_id: str) -> TestSuite | None:
+        self._expire_stale_generation(version_id)
+        return self.repository.get_attempt_for_version(version_id)
+
+    def _expire_stale_generation(self, version_id: str) -> None:
+        timeout = max(300.0, 2 * self.settings.test_generation_timeout_seconds)
+        self.repository.fail_stale_attempt(version_id, timeout)
 
     def generate(self, version_id: str, total_count: int) -> TestSuite:
         try:
@@ -68,6 +77,7 @@ class TestSuiteService:
         request = self._get_suite_metadata(
             classification, total_count, scores, allocation
         )
+        self._expire_stale_generation(version_id)
         try:
             record = self.repository.enqueue(version_id, request)
         except ValueError as exc:
@@ -117,6 +127,10 @@ def test_suite_detail_response(record: TestSuite) -> dict[str, Any]:
         "items": result.get("items", []),
         "generated_at": result.get("generated_at"),
     }
+
+
+def test_suite_generation_response(record: TestSuite) -> dict[str, Any]:
+    return test_suite_response(record)
 
 
 def completed_result(

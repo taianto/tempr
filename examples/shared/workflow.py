@@ -39,8 +39,22 @@ def _classify_version(client: TemprClient, version_id: str, label: str) -> None:
 
 def _generate_suite(client: TemprClient, version_id: str, count: int) -> dict:
     print(f"Generating {count} test cases…")
-    client.generate_suite(version_id, count)
-    suite = wait_for_completion(lambda: client.get_suite(version_id), "Test suite")
+    generation = client.generate_suite(version_id, count)
+
+    def fetch_generation():
+        suite = client.get_suite(version_id)
+        if suite is None:
+            return None
+        if suite.get("id") == generation["id"]:
+            return suite
+        attempt = suite.get("generation")
+        if attempt and attempt.get("id") == generation["id"]:
+            return attempt
+        return None
+
+    suite = wait_for_completion(fetch_generation, "Test suite")
+    if "items" not in suite:
+        suite = client.get_suite(version_id)
     if len(suite.get("items", [])) != count:
         raise TemprAPIError("Tempr returned an unexpected number of test cases")
     return suite

@@ -6,10 +6,12 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Index,
     Numeric,
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.types import TypeDecorator
@@ -103,8 +105,8 @@ class AgentVersion(Base):
     classification: Mapped["Classification | None"] = relationship(
         foreign_keys=[classification_id], lazy="joined"
     )
-    test_suite: Mapped["TestSuite | None"] = relationship(
-        back_populates="version", cascade="all, delete-orphan", uselist=False
+    test_suites: Mapped[list["TestSuite"]] = relationship(
+        back_populates="version", cascade="all, delete-orphan"
     )
 
 
@@ -134,10 +136,23 @@ class TestSuite(Base):
 
     __tablename__ = "test_suites"
     __table_args__ = (
-        UniqueConstraint("version_id", name="uq_test_suites_version_id"),
         CheckConstraint(
             "status IN ('queued', 'running', 'completed', 'failed')",
             name="ck_test_suites_status",
+        ),
+        Index(
+            "uq_test_suites_completed_version_id",
+            "version_id",
+            unique=True,
+            sqlite_where=text("status = 'completed'"),
+            postgresql_where=text("status = 'completed'"),
+        ),
+        Index(
+            "uq_test_suites_attempt_version_id",
+            "version_id",
+            unique=True,
+            sqlite_where=text("status IN ('queued', 'running', 'failed')"),
+            postgresql_where=text("status IN ('queued', 'running', 'failed')"),
         ),
     )
 
@@ -155,7 +170,7 @@ class TestSuite(Base):
     updated_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), nullable=False, default=utc_now, onupdate=utc_now
     )
-    version: Mapped[AgentVersion] = relationship(back_populates="test_suite")
+    version: Mapped[AgentVersion] = relationship(back_populates="test_suites")
     trace: Mapped["TestSuiteTrace | None"] = relationship(
         back_populates="test_suite", cascade="all, delete-orphan", uselist=False
     )

@@ -1,3 +1,4 @@
+from datetime import timedelta
 from typing import Any
 from uuid import uuid4
 
@@ -18,8 +19,45 @@ class TestSuiteRepository:
 
     def get_for_version(self, version_id: str) -> TestSuite | None:
         return self.db.scalar(
-            select(TestSuite).where(TestSuite.version_id == version_id)
+            select(TestSuite)
+            .where(TestSuite.version_id == version_id)
+            .order_by(
+                TestSuite.status != "completed",
+                TestSuite.created_at.desc(),
+                TestSuite.id.desc(),
+            )
         )
+
+    def get_completed_for_version(self, version_id: str) -> TestSuite | None:
+        return self.db.scalar(
+            select(TestSuite).where(
+                TestSuite.version_id == version_id, TestSuite.status == "completed"
+            )
+        )
+
+    def get_attempt_for_version(self, version_id: str) -> TestSuite | None:
+        return self.db.scalar(
+            select(TestSuite)
+            .where(TestSuite.version_id == version_id, TestSuite.status != "completed")
+            .order_by(TestSuite.created_at.desc(), TestSuite.id.desc())
+        )
+
+    def fail_stale_attempt(self, version_id: str, timeout_seconds: float) -> None:
+        cutoff = utc_now() - timedelta(seconds=timeout_seconds)
+        self.db.execute(
+            update(TestSuite)
+            .where(
+                TestSuite.version_id == version_id,
+                TestSuite.status.in_(("queued", "running")),
+                TestSuite.updated_at < cutoff,
+            )
+            .values(
+                status="failed",
+                error="Generation expired before it completed. Retry generation.",
+                updated_at=utc_now(),
+            )
+        )
+        self.db.commit()
 
     def get(self, version_id: str) -> TestSuite | None:
         return self.get_for_version(version_id)
@@ -42,9 +80,12 @@ class TestSuiteRepository:
             self.db.rollback()
             return None
 
-        existing = self.get_for_version(version_id)
-        if existing is not None:
-            self.db.delete(existing)
+        attempt = self.get_attempt_for_version(version_id)
+        if attempt is not None:
+            if attempt.status in ("queued", "running"):
+                self.db.rollback()
+                raise ValueError("A test suite generation is already in progress")
+            self.db.delete(attempt)
             self.db.flush()
 
         record = TestSuite(
@@ -114,23 +155,43 @@ class TestSuiteRepository:
         self.db.commit()
 
     def complete(self, record_id: str, result: dict[str, Any]) -> bool:
-        saved = self.db.execute(
-            update(TestSuite)
-            .where(
-                TestSuite.id == record_id,
-                TestSuite.status == "running",
-                TestSuite.version_id.in_(
-                    select(AgentVersion.id)
-                    .join(Agent, AgentVersion.agent_id == Agent.id)
-                    .where(Agent.deleted_at.is_(None))
-                ),
-            )
-            .values(
-                status="completed", result_json=result, error=None, updated_at=utc_now()
+        attempt = self.db.scalar(
+            select(TestSuite).where(
+                TestSuite.id == record_id, TestSuite.status == "running"
             )
         )
-        self.db.commit()
-        return saved.rowcount == 1
+        if attempt is None:
+            self.db.rollback()
+            return False
+        agent_id = self.db.scalar(
+            select(AgentVersion.agent_id).where(AgentVersion.id == attempt.version_id)
+        )
+        if agent_id is None:
+            self.db.rollback()
+            return False
+        locked = self.db.execute(
+            update(Agent)
+            .where(Agent.id == agent_id, Agent.deleted_at.is_(None))
+            .values(name=Agent.name, updated_at=Agent.updated_at)
+            .returning(Agent.id)
+        ).scalar_one_or_none()
+        if locked is None:
+            self.db.rollback()
+            return False
+        old_suite = self.get_completed_for_version(attempt.version_id)
+        if old_suite is not None:
+            self.db.delete(old_suite)
+            self.db.flush()
+        attempt.status = "completed"
+        attempt.result_json = result
+        attempt.error = None
+        attempt.updated_at = utc_now()
+        try:
+            self.db.commit()
+            return True
+        except IntegrityError:
+            self.db.rollback()
+            return False
 
     def fail(self, record_id: str, detail: str) -> None:
         self.db.execute(

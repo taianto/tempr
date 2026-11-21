@@ -53,3 +53,4 @@ class TestSuiteGenerationResponse(BaseModel):
 class TestSuiteResponse(TestSuiteGenerationResponse):
     items: list[TestSuiteItem] = Field(default_factory=list)
     generated_at: datetime | None = None
+    generation: TestSuiteGenerationResponse | None = None
