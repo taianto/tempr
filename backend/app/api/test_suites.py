@@ -20,6 +20,7 @@ from app.services.test_suites import (
     TestSuiteService,
     TestSuiteServiceError,
     test_suite_detail_response,
+    test_suite_generation_response,
     test_suite_response,
 )
 
@@ -38,7 +39,16 @@ def get_test_suite(
         record = service.get(version_id)
     except TestSuiteServiceError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
-    return TestSuiteResponse(**test_suite_detail_response(record)) if record else None
+    if record is None:
+        return None
+    response = test_suite_detail_response(record)
+    generation = service.get_generation(version_id)
+    response["generation"] = (
+        test_suite_generation_response(generation)
+        if generation is not None and generation.id != record.id
+        else None
+    )
+    return TestSuiteResponse(**response)
 
 
 @router.post(

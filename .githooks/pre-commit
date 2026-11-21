@@ -20,6 +20,6 @@ echo "Checking backend with Ruff..."
         python=python
     fi
 
-    "$python" -m ruff check .
+    "$python" -m ruff check --fix --exit-non-zero-on-fix .
     "$python" -m ruff format --check .
 )

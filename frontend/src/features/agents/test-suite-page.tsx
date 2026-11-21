@@ -37,8 +37,9 @@ export function TestSuitePage() {
   const busy =
     phase !== null ||
     generate.isPending ||
-    suite.data?.status === "queued" ||
-    suite.data?.status === "running";
+    [suite.data?.generation?.status ?? suite.data?.status].some(
+      (status) => status === "queued" || status === "running",
+    );
   const isReplacing = Boolean(suite.data?.has_completed_suite);
 
   useEffect(() => {
@@ -74,7 +75,7 @@ export function TestSuitePage() {
     if (
       isReplacing &&
       !window.confirm(
-        "Regenerating removes the current test suite. If generation fails, the previous suite cannot be restored. Continue?",
+        "A successful regeneration replaces the current test suite and removes its trace and evaluation. Continue?",
       )
     )
       return;
@@ -176,6 +177,20 @@ export function TestSuitePage() {
               </section>
             ) : suite.data?.has_completed_suite ? (
               <>
+                {suite.data.generation && (
+                  <p
+                    role="status"
+                    className={`mt-5 rounded-xl border px-4 py-3 text-sm ${
+                      suite.data.generation.status === "failed"
+                        ? "border-amber-200 bg-amber-50 text-amber-800"
+                        : "border-indigo-100 bg-indigo-50/60 text-indigo-700"
+                    }`}
+                  >
+                    {suite.data.generation.status === "failed"
+                      ? `Regeneration failed. ${suite.data.generation.error ?? "The current suite is still available."}`
+                      : `Regeneration ${suite.data.generation.status}… Your current suite remains available.`}
+                  </p>
+                )}
                 <section aria-label="Evaluation status" className="mt-7">
                   {evaluation.isLoading ? (
                     <p

@@ -71,7 +71,7 @@ export function useTestSuite(versionId: string) {
     queryFn: ({ signal }) => testSuitesApi.get(versionId, signal),
     enabled: Boolean(versionId),
     refetchInterval: (query) => {
-      const status = query.state.data?.status;
+      const status = query.state.data?.generation?.status ?? query.state.data?.status;
       return status === "queued" || status === "running" ? 2_000 : false;
     },
   });
@@ -109,23 +109,12 @@ export function useGenerateTestSuite(versionId: string) {
   return useMutation({
     mutationKey: ["generate-test-suite", versionId],
     mutationFn: (totalCount: number) => testSuitesApi.generate(versionId, totalCount),
-    onMutate: async () => {
-      const current = client.getQueryData<TestSuite | null>(agentKeys.testSuite(versionId));
-      if (!current) return;
-      await Promise.all([
-        client.cancelQueries({ queryKey: agentKeys.evaluation(current.id) }),
-        client.cancelQueries({ queryKey: agentKeys.trace(current.id) }),
-      ]);
-      client.removeQueries({ queryKey: agentKeys.evaluation(current.id) });
-      client.removeQueries({ queryKey: agentKeys.trace(current.id) });
-    },
     onSuccess: async (generation: TestSuiteGeneration) => {
-      const currentSuite: TestSuite = {
-        ...generation,
-        items: [],
-        generated_at: null,
-      };
-      client.setQueryData<TestSuite | null>(agentKeys.testSuite(versionId), currentSuite);
+      client.setQueryData<TestSuite | null>(agentKeys.testSuite(versionId), (current) =>
+        current?.has_completed_suite
+          ? { ...current, generation }
+          : { ...generation, items: [], generated_at: null },
+      );
       await Promise.all([
         client.invalidateQueries({ queryKey: agentKeys.testSuite(versionId) }),
         client.invalidateQueries({ queryKey: agentKeys.all }),

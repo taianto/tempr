@@ -111,9 +111,9 @@ The result is saved per version and reused. Add `?refresh=true` to replace it. R
 
 Send `POST /api/v1/versions/{version_id}/test-suites/generate` with the optional body `{"total_count":20}`. The count defaults to 20 and accepts 1–100. The version must already be classified.
 
-The response is `202 Accepted` with a suite `id` and job status. Poll `GET /api/v1/versions/{version_id}/test-suites` until `status` is `completed` or `failed`. Completed `items` contain case IDs, categories, questions, and `expected_behavior`. A valid version without a suite returns `null`.
+The response is `202 Accepted` with a generation attempt `id` and job status. Poll `GET /api/v1/versions/{version_id}/test-suites` until the returned suite has that `id`, or its optional `generation` object has the attempt `id` and status `failed`. Completed `items` contain case IDs, categories, questions, and `expected_behavior`. A valid version without a suite or generation attempt returns `null`.
 
-Each version has one current suite. Generating again replaces it immediately, including its trace and evaluation, even if the new generation later fails. A refreshed classification affects the next generated suite; an existing suite retains its allocation snapshot.
+Each version keeps its current completed suite while a replacement is generated and validated. A successful replacement removes the previous suite and its trace and evaluation in the same transaction. A failed attempt remains visible alongside the existing suite until retried. A refreshed classification affects the next generated suite; an existing suite retains its allocation snapshot.
 
 ### 4. Run cases and upload a trace
 

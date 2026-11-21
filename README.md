@@ -114,9 +114,11 @@ git config core.hooksPath .githooks
 ```
 
 The pre-commit hook runs `npm run check` in `frontend` and Ruff's lint and format
-checks in `backend`. It checks the full working tree without changing files and
-blocks the commit if any check fails. Ruff uses `backend/.venv/bin/python` when
-available, otherwise `python3` (or `python`) from your environment.
+checks in `backend`. It checks the full working tree and blocks the commit if
+any check fails. Ruff applies available lint fixes and stops the commit if it
+changed files, so you can stage those fixes and retry. Ruff uses
+`backend/.venv/bin/python` when available, otherwise `python3` (or `python`)
+from your environment.
 
 To fix failures, run `npm run fix` in `frontend`, or `python -m ruff check . --fix`
 and `python -m ruff format .` in `backend` with the backend environment activated.

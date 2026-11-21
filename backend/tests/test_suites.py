@@ -316,6 +316,29 @@ def test_regenerating_suite_cascades_trace_deletion(suite_environment):
         assert db.get(TraceRecord, created.json()["id"]) is None
 
 
+def test_failed_regeneration_keeps_completed_suite_and_trace(suite_environment):
+    client, sessions, provider = suite_environment
+    _save_completed_suite(sessions)
+    created = client.post(TRACE_PATH, json={"trace": {"steps": []}})
+    assert created.status_code == 201
+    provider.return_value.with_structured_output.return_value.invoke.return_value = {
+        "items": []
+    }
+
+    generated = client.post(GENERATION_PATH, json={"total_count": 1})
+
+    assert generated.status_code == 202
+    response = client.get("/api/v1/versions/agv_suite/test-suites").json()
+    assert response["id"] == "ts_completed"
+    assert response["generation"]["id"] == generated.json()["id"]
+    assert response["generation"]["status"] == "failed"
+    assert client.get(TRACE_PATH).status_code == 200
+    with sessions() as db:
+        assert db.get(SuiteRecord, "ts_completed").status == "completed"
+        assert db.get(SuiteRecord, generated.json()["id"]).status == "failed"
+        assert db.get(TraceRecord, created.json()["id"]) is not None
+
+
 def _upload_evaluable_trace(client):
     return client.post(
         TRACE_PATH,

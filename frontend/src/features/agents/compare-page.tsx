@@ -146,7 +146,9 @@ export function ComparePage() {
       enabled: columns[index]?.data?.agent_id === agentId,
       refetchOnWindowFocus: true,
       refetchInterval: (query: Query<TestSuite | null>) =>
-        query.state.data?.status === "queued" || query.state.data?.status === "running"
+        [query.state.data?.generation?.status ?? query.state.data?.status].some(
+          (status) => status === "queued" || status === "running",
+        )
           ? 2_000
           : false,
     })),
@@ -194,9 +196,10 @@ export function ComparePage() {
     if (suiteQuery?.isLoading || (suiteQuery?.isFetching && !suite))
       return { status: "Loading test suite…" };
     if (!suite) return { status: "No test suite" };
-    if (suite.status === "queued" || suite.status === "running")
+    if (!suite.has_completed_suite && (suite.status === "queued" || suite.status === "running"))
       return { status: `Test suite ${suite.status}…` };
-    if (suite.status === "failed") return { status: "Test suite generation failed" };
+    if (!suite.has_completed_suite && suite.status === "failed")
+      return { status: "Test suite generation failed" };
     if (!suite.has_completed_suite) return { status: "No completed test suite" };
     if (evaluationQuery?.isError && (evaluationQuery.error as { status?: number }).status !== 404)
       return { status: "Could not load evaluation", error: evaluationQuery.error.message, retry };

@@ -53,6 +53,7 @@ export type TestSuiteGeneration = {
 export type TestSuite = TestSuiteGeneration & {
   items: TestSuiteItem[];
   generated_at: string | null;
+  generation?: TestSuiteGeneration | null;
 };
 export type EvaluationResult = {
   id: string;
